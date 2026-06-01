@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MailFlow-agent</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">✦</span>
+      <span class="title">MailFlow-agent</span>
+    </div>
+    <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+  </header>
+
+  <!-- Auth -->
+  <section class="auth" id="authSection">
+    <p class="auth-text">Connect your Gmail account to get started.</p>
+    <button class="btn primary" id="authBtn">Sign in with Google</button>
+  </section>
+
+  <!-- Connected -->
+  <section class="connected" id="actionsGrid" hidden>
+    <div class="status-row">
+      <span class="dot" id="connectionDot"></span>
+      <span class="status-label" id="statusText">Connected</span>
+      <span class="email" id="userEmail" hidden></span>
+    </div>
+
+    <div class="stats" id="statsSection">
+      <div class="stat">
+        <span class="stat-val" id="unreadCount">—</span>
+        <span class="stat-lbl">Unread</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val" id="pendingCount">—</span>
+        <span class="stat-lbl">Pending</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="action-btn" id="btnSummarize">📝 Summarize</button>
+      <button class="action-btn" id="btnPriority">⚡ Priority</button>
+      <button class="action-btn accent" id="btnOpenPanel">◫ Open Panel</button>
+    </div>
+  </section>
+
+  <footer>
+    <a href="#" id="optionsLink">Settings</a>
+    <span class="sep">·</span>
+    <span>Powered by <strong>Gemini</strong></span>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
