@@ -30,6 +30,7 @@ const dom = {
   historySection:  $('#historySection'),
   historyList:     $('#historyList'),
   toastContainer:  $('#toastContainer'),
+  clearChatBtn:    $('#clearChatBtn'),
 };
 
 // ─── State ───────────────────────────────────────────────────────
@@ -43,7 +44,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupCollapsibleSections();
   await checkAuthStatus();
   await loadConversationHistory();
+  await checkPendingQuickAction();
 });
+
+async function checkPendingQuickAction() {
+  try {
+    const { pendingQuickAction } = await chrome.storage.session.get('pendingQuickAction');
+    if (pendingQuickAction) {
+      await chrome.storage.session.remove('pendingQuickAction');
+      setTimeout(() => {
+        handleQuickAction(pendingQuickAction);
+      }, 500);
+    }
+  } catch (e) {}
+}
 
 // ─── Auth ────────────────────────────────────────────────────────
 async function checkAuthStatus() {
@@ -111,8 +125,8 @@ async function handleSendMessage() {
     const payload = {
       type: MESSAGE_TYPES.CHAT,
       message: text,
-      context: currentEmailContext ?? undefined,
-      history: conversationHistory.slice(-10), // Last 10 messages for context
+      emailContext: currentEmailContext ?? null,
+      conversationHistory: conversationHistory.slice(-10),
     };
 
     const response = await sendToBackground(payload);
@@ -394,6 +408,23 @@ function setupEventListeners() {
     chrome.runtime.openOptionsPage();
   });
 
+  // Clear chat
+  dom.clearChatBtn?.addEventListener('click', () => {
+    conversationHistory = [];
+    dom.chatMessages.innerHTML = `
+      <div class="message message--agent fade-in">
+        <div class="message__avatar">✦</div>
+        <div class="message__content">
+          <div class="message__role">MailFlow</div>
+          <div class="message__text">👋 Hello! I can summarize emails, draft replies, search your inbox, and more. What would you like to do?</div>
+          <div class="message__time">Just now</div>
+        </div>
+      </div>
+    `;
+    saveConversationHistory();
+    showToast('Chat cleared', 'info');
+  });
+
   // Chat input
   dom.chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -430,6 +461,11 @@ function setupEventListeners() {
         break;
       case MESSAGE_TYPES.AUTH_STATUS_RESPONSE:
         updateAuthUI(message.authenticated, message.email);
+        break;
+      case 'TRIGGER_QUICK_ACTION':
+        if (message.action) {
+          handleQuickAction(message.action);
+        }
         break;
       default:
         break;
@@ -507,8 +543,13 @@ async function loadConversationHistory() {
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function sendToBackground(message) {
+  const { type, ...rest } = message;
+  const wrappedMessage = {
+    type,
+    data: rest
+  };
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response) => {
+    chrome.runtime.sendMessage(wrappedMessage, (response) => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else if (response && typeof response === 'object' && 'success' in response) {
