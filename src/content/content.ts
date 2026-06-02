@@ -162,16 +162,16 @@ async function showNotification(text: string, level: string = 'info'): Promise<v
   const existing = document.getElementById('gmail-ai-notification');
   if (existing) existing.remove();
 
-  let theme = 'dark';
+  let theme = 'light';
   try {
     const res = (await chrome.storage.local.get('extension_settings')) as {
       extension_settings?: { theme?: 'light' | 'dark' };
     };
-    if (res?.extension_settings?.theme === 'light') {
-      theme = 'light';
+    if (res?.extension_settings?.theme === 'dark') {
+      theme = 'dark';
     }
   } catch (e) {
-    // Default to dark theme on error
+    // Default to light theme on error
   }
 
   const el = document.createElement('div');
