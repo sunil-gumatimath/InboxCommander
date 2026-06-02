@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════
-   Shared Base — MailFlow-agent
+   Shared Base — MailFlow-agent (Ant Design Style)
    Reset, typography, body, scrollbar, focus, motion preferences,
    and animations shared by every surface. Imported AFTER tokens.css.
    ══════════════════════════════════════════════════════════════════ */
@@ -20,8 +20,8 @@ html {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.5714;
   color: var(--text-primary);
   background: var(--bg-base);
   -webkit-font-smoothing: antialiased;
@@ -46,7 +46,7 @@ a {
 }
 
 a:hover {
-  color: var(--violet);
+  color: var(--accent-hover);
 }
 
 /* ── Focus Visibility (a11y) ──────────────────────────────────── */
@@ -56,7 +56,7 @@ a:hover {
 
 :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: 1px;
   border-radius: var(--radius-sm);
 }
 
@@ -65,16 +65,14 @@ button:focus-visible,
 .send-btn:focus-visible,
 .chip:focus-visible {
   outline-offset: 1px;
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   border-color: var(--accent);
-  box-shadow:
-    0 0 0 3px var(--accent-soft),
-    0 0 16px rgba(129, 140, 248, 0.06);
+  box-shadow: 0 0 0 2px rgba(5, 145, 255, 0.06);
 }
 
 /* ── Reduced Motion ───────────────────────────────────────────── */
@@ -89,8 +87,8 @@ textarea:focus-visible {
 
 /* ── Scrollbar ────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -98,31 +96,31 @@ textarea:focus-visible {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: var(--radius-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
 }
 
-:root[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
 }
 
-:root[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* ── Animations (shared) ──────────────────────────────────────── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes bgShift {
@@ -133,17 +131,17 @@ textarea:focus-visible {
 
 @keyframes floatIcon {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-4px); }
+  50%      { transform: translateY(-3px); }
 }
 
 @keyframes logoShimmer {
-  0%, 100% { box-shadow: 0 6px 20px var(--accent-glow), 0 0 0 1px rgba(255, 255, 255, 0.1) inset; }
-  50%      { box-shadow: 0 8px 28px rgba(129, 140, 248, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15) inset; }
+  /* Simplified — no-op, kept for compatibility */
+  0%, 100% { opacity: 1; }
 }
 
 @keyframes dotPulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15), 0 0 10px var(--green-glow); }
-  50%      { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.1), 0 0 18px rgba(74, 222, 128, 0.4); }
+  0%, 100% { box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.15); }
+  50%      { box-shadow: 0 0 0 4px rgba(82, 196, 26, 0.1); }
 }
 
 @keyframes gradientSlide {
@@ -154,38 +152,37 @@ textarea:focus-visible {
 @keyframes loadingBounce {
   0%, 60%, 100% {
     opacity: 0.3;
-    transform: translateY(0) scale(0.85);
+    transform: scale(0.85);
   }
   30% {
     opacity: 1;
-    transform: translateY(-6px) scale(1);
-    background: var(--violet);
+    transform: scale(1);
   }
 }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.95); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes toastOut {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(-8px) scale(0.95); }
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
 }
 
 @keyframes notifSlideIn {
-  from { opacity: 0; transform: translateY(20px) scale(0.95); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes notifSlideOut {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
 }
 
-/* ── Stagger Utilities (replaces hard-coded :nth-child chains) ── */
+/* ── Stagger Utilities ───────────────────────────────────────── */
 .stagger {
-  animation: fadeUp 0.3s ease-out both;
+  animation: fadeUp 0.25s var(--ease-out) both;
   animation-delay: calc(var(--i, 0) * var(--stagger-step));
 }
 
