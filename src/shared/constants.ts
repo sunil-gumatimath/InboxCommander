@@ -98,7 +98,6 @@ export const ACTION_STATUS = {
 
 // ─── Default Settings ────────────────────────────────────────────
 export const DEFAULT_SETTINGS = {
-  geminiApiKey: '',
   approvalRequired: {
     low: false,
     medium: true,

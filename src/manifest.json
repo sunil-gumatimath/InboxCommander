@@ -5,12 +5,10 @@
   "description": "AI-powered email assistant that can read, summarize, classify, draft, reply, delete, archive, and label emails",
 
   "permissions": [
-    "identity",
     "storage",
     "sidePanel",
     "tabs",
     "alarms",
-    "scripting",
     "activeTab"
   ],
 

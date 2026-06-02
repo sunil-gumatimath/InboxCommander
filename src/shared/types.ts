@@ -1,5 +1,4 @@
 export interface Settings {
-  geminiApiKey: string;
   approvalRequired: {
     low: boolean;
     medium: boolean;
