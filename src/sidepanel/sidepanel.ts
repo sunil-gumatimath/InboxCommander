@@ -3,7 +3,7 @@
  * Main AI chat interface controller
  */
 
-import { MESSAGE_TYPES, RISK_LEVELS, ACTION_STATUS } from '../shared/constants';
+import { MESSAGE_TYPES } from '../shared/constants';
 import type { ConversationTurn, EmailContext, QueuedAction } from '../shared/types';
 import { applyStoredTheme } from '../shared/utils';
 
@@ -151,10 +151,6 @@ async function handleSendMessage(): Promise<void> {
       addMessage('agent', `⚠️ ${response.error}`);
     } else {
       addMessage('agent', response?.reply ?? 'I couldn\'t process that request. Please try again.');
-      // Render action suggestions if present
-      if (response?.actions?.length) {
-        renderActionSuggestions(response.actions);
-      }
     }
   } catch (err) {
     loadingEl.remove();
@@ -212,36 +208,8 @@ function showLoadingIndicator(): HTMLElement {
   return el;
 }
 
-interface ActionSuggestion {
-  title: string;
-  type: string;
-  description: string;
-  payload: any;
-}
-
-function renderActionSuggestions(actions: ActionSuggestion[]): void {
-  if (!dom.chatMessages) return;
-  const lastAgentMsg = dom.chatMessages.querySelector('.message--agent:last-child .message__content');
-  if (!lastAgentMsg) return;
-
-  actions.forEach((action) => {
-    const card = document.createElement('div');
-    card.className = 'action-card';
-    card.innerHTML = `
-      <div class="action-card__title">${escapeHtml(action.title ?? action.type)}</div>
-      <div class="action-card__desc">${escapeHtml(action.description ?? '')}</div>
-    `;
-    card.addEventListener('click', () => {
-      sendToBackground({ type: action.type, ...action.payload });
-      showToast(`Action "${action.title}" triggered`, 'info');
-    });
-    lastAgentMsg.appendChild(card);
-  });
-}
-
 // ─── Quick Actions ───────────────────────────────────────────────
-function handleQuickAction(actionType: string): void {
-  if (!dom.chatInput) return;
+async function handleQuickAction(actionType: string): Promise<void> {
   const labels: Record<string, string> = {
     SUMMARIZE_INBOX: 'Summarize my inbox',
     PRIORITY_EMAILS: 'Show priority emails',
@@ -249,9 +217,61 @@ function handleQuickAction(actionType: string): void {
     DRAFT_REPLY: 'Draft a reply',
   };
 
-  const text = labels[actionType] ?? actionType;
-  dom.chatInput.value = text;
-  handleSendMessage();
+  // Inbox-wide actions have dedicated background handlers that read the inbox.
+  const inboxActions: Record<string, string> = {
+    SUMMARIZE_INBOX: MESSAGE_TYPES.SUMMARIZE_INBOX,
+    PRIORITY_EMAILS: MESSAGE_TYPES.PRIORITY_EMAILS,
+    UNREAD_EMAILS: MESSAGE_TYPES.UNREAD_EMAILS,
+  };
+
+  const backgroundType = inboxActions[actionType];
+  if (backgroundType) {
+    await runInboxAction(backgroundType, labels[actionType] ?? actionType);
+    return;
+  }
+
+  // Drafting a reply needs the currently open email.
+  if (actionType === 'DRAFT_REPLY') {
+    if (currentEmailContext) {
+      handleContextAction('DRAFT_REPLY');
+    } else {
+      showToast('Open an email first to draft a reply', 'warning');
+    }
+    return;
+  }
+
+  // Anything else falls back to a plain chat message.
+  if (dom.chatInput) {
+    dom.chatInput.value = labels[actionType] ?? actionType;
+    handleSendMessage();
+  }
+}
+
+/** Run an inbox-wide quick action against its dedicated background handler. */
+async function runInboxAction(type: string, label: string): Promise<void> {
+  if (isWaitingForResponse) return;
+
+  addMessage('user', label);
+  isWaitingForResponse = true;
+  if (dom.sendBtn) dom.sendBtn.disabled = true;
+
+  const loadingEl = showLoadingIndicator();
+
+  try {
+    const response = await sendToBackground({ type });
+    loadingEl.remove();
+    if (response?.error) {
+      addMessage('agent', `⚠️ ${response.error}`);
+    } else {
+      addMessage('agent', response?.reply ?? response?.summary ?? 'No results found.');
+    }
+  } catch {
+    loadingEl.remove();
+    addMessage('agent', '😔 Something went wrong. Please try again.');
+  } finally {
+    isWaitingForResponse = false;
+    if (dom.sendBtn) dom.sendBtn.disabled = false;
+  }
 }
 
 // ─── Email Context ───────────────────────────────────────────────
@@ -315,14 +335,7 @@ async function fetchPendingApprovals(): Promise<void> {
   }
 }
 
-interface ApprovalItem {
-  id: string;
-  actionType: string;
-  description: string;
-  risk: string;
-}
-
-function renderApprovals(approvals: ApprovalItem[]): void {
+function renderApprovals(approvals: QueuedAction[]): void {
   if (!approvals.length) {
     if (dom.approvalsSection) dom.approvalsSection.hidden = true;
     return;
@@ -333,15 +346,15 @@ function renderApprovals(approvals: ApprovalItem[]): void {
 
   if (dom.approvalsList) {
     dom.approvalsList.innerHTML = approvals.map((a) => {
-      const riskBadge = `<span class="badge badge--risk" data-risk="${a.risk ?? 'MEDIUM'}">${a.risk ?? 'MEDIUM'}</span>`;
-      const icon = getActionIcon(a.actionType);
+      const riskBadge = `<span class="badge badge--risk" data-risk="${a.riskLevel ?? 'MEDIUM'}">${a.riskLevel ?? 'MEDIUM'}</span>`;
+      const icon = getActionIcon(a.type);
       return `
         <div class="approval-card" data-id="${a.id}">
           <div class="approval-card__header">
             <div class="approval-card__icon">${icon}</div>
             <div class="approval-card__info">
-              <div class="approval-card__type">${escapeHtml(a.actionType ?? 'Action')}</div>
-              <div class="approval-card__desc">${escapeHtml(a.description ?? '')}</div>
+              <div class="approval-card__type">${escapeHtml(a.type ?? 'Action')}</div>
+              <div class="approval-card__desc">${escapeHtml(a.reason ?? '')}</div>
             </div>
             ${riskBadge}
           </div>
@@ -377,14 +390,11 @@ function renderApprovals(approvals: ApprovalItem[]): void {
 }
 
 async function handleApproval(id: string, action: 'approve' | 'reject' | 'edit'): Promise<void> {
-  const typeMap: Record<string, string> = {
-    approve: MESSAGE_TYPES.APPROVE_ACTION,
-    reject: MESSAGE_TYPES.REJECT_ACTION,
-    edit: MESSAGE_TYPES.EDIT_ACTION,
-  };
+  if (action === 'edit') {
+    return handleEditAction(id);
+  }
 
-  const type = typeMap[action];
-  if (!type) return;
+  const type = action === 'approve' ? MESSAGE_TYPES.APPROVE_ACTION : MESSAGE_TYPES.REJECT_ACTION;
 
   try {
     const response = await sendToBackground({ type, actionId: id });
@@ -393,6 +403,22 @@ async function handleApproval(id: string, action: 'approve' | 'reject' | 'edit')
     fetchActionHistory();
   } catch {
     showToast(`Failed to ${action} action`, 'error');
+  }
+}
+
+/** Prompt the user to revise a pending action's note, then persist the edit. */
+async function handleEditAction(id: string): Promise<void> {
+  const card = dom.approvalsList?.querySelector(`.approval-card[data-id="${id}"]`);
+  const currentReason = card?.querySelector('.approval-card__desc')?.textContent ?? '';
+  const newReason = window.prompt('Edit the note for this action:', currentReason);
+  if (newReason === null) return; // user cancelled
+
+  try {
+    await sendToBackground({ type: MESSAGE_TYPES.EDIT_ACTION, actionId: id, reason: newReason });
+    showToast('Action updated', 'success');
+    fetchPendingApprovals();
+  } catch {
+    showToast('Failed to edit action', 'error');
   }
 }
 
@@ -420,12 +446,13 @@ function renderHistory(history: QueuedAction[]): void {
   }
 
   dom.historyList.innerHTML = history.slice(0, 20).map((item) => {
+    // Statuses are written lowercase by the action queue (executed/failed/…).
     const statusIcon = {
-      [ACTION_STATUS.COMPLETED]: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-      [ACTION_STATUS.FAILED]: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
-      [ACTION_STATUS.PENDING]: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-      [ACTION_STATUS.APPROVED]: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-      [ACTION_STATUS.REJECTED]: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+      executed: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+      failed: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+      pending: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      approved: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+      rejected: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     }[item.status] ?? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 
     return `
