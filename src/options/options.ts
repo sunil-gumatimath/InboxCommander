@@ -26,14 +26,18 @@ const dom = {
   get maxEmails() { return $('#maxEmails') as HTMLInputElement | null; },
   
   get connectedEmail() { return $('#accountEmail'); },
+  get accountIndicator() { return $('#accountIndicator'); },
+  get accountStatusText() { return $('#accountStatusText'); },
   get disconnectBtn() { return $('#disconnectBtn') as HTMLButtonElement | null; },
   
-  get saveFloatBtn() { return $('#saveBtn') as HTMLButtonElement | null; },
+  get saveBar() { return $('#saveBar') as HTMLElement | null; },
+  get saveBtn() { return $('#saveBtn') as HTMLButtonElement | null; },
   get themeDark() { return $('#themeDark'); },
   get themeLight() { return $('#themeLight'); },
   
   get clearLogBtn() { return $('#clearLogBtn') as HTMLButtonElement | null; },
   get actionLog() { return $('#actionLog'); },
+  get toastContainer() { return $('#toastContainer'); },
 };
 
 let currentSettings: Settings = { ...DEFAULT_SETTINGS };
@@ -44,6 +48,7 @@ async function initOptions(): Promise<void> {
   await checkAuthStatus();
   await loadActionLog();
   setupEventListeners();
+  setupSidebarNav();
 }
 
 if (document.readyState === 'loading') {
@@ -71,7 +76,7 @@ async function loadSettings(): Promise<void> {
   if (dom.userName) dom.userName.value = currentSettings.userName || '';
   if (dom.maxEmails) dom.maxEmails.value = String(currentSettings.maxEmails || 50);
 
-  updateThemeUI(currentSettings.theme || 'dark');
+  updateThemeUI(currentSettings.theme || 'light');
 }
 
 async function checkAuthStatus(): Promise<void> {
@@ -79,15 +84,22 @@ async function checkAuthStatus(): Promise<void> {
     const response = await sendToBackground({ type: MESSAGE_TYPES.AUTH_STATUS });
     if (response?.authenticated) {
       if (dom.connectedEmail) dom.connectedEmail.textContent = response.email || 'Connected';
+      if (dom.accountIndicator) dom.accountIndicator.classList.add('connected');
+      if (dom.accountStatusText) dom.accountStatusText.textContent = 'Connected';
       if (dom.disconnectBtn) dom.disconnectBtn.hidden = false;
     } else {
-      if (dom.connectedEmail) dom.connectedEmail.textContent = 'Not connected';
-      if (dom.disconnectBtn) dom.disconnectBtn.hidden = true;
+      setDisconnected();
     }
   } catch {
-    if (dom.connectedEmail) dom.connectedEmail.textContent = 'Not connected';
-    if (dom.disconnectBtn) dom.disconnectBtn.hidden = true;
+    setDisconnected();
   }
+}
+
+function setDisconnected(): void {
+  if (dom.connectedEmail) dom.connectedEmail.textContent = 'Not connected';
+  if (dom.accountIndicator) dom.accountIndicator.classList.remove('connected');
+  if (dom.accountStatusText) dom.accountStatusText.textContent = 'Disconnected';
+  if (dom.disconnectBtn) dom.disconnectBtn.hidden = true;
 }
 
 async function loadActionLog(): Promise<void> {
@@ -107,8 +119,8 @@ function renderActionLog(log: LogItem[]): void {
   if (!log || !log.length) {
     dom.actionLog.innerHTML = `
       <div class="empty-state">
-        <span class="empty-state__icon">📋</span>
-        <span class="empty-state__text">No actions recorded</span>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>No actions recorded yet</span>
       </div>
     `;
     return;
@@ -116,18 +128,26 @@ function renderActionLog(log: LogItem[]): void {
   
   dom.actionLog.innerHTML = log.slice(0, 50).map(item => {
     const statusIcon = {
-      executed: '✅',
-      failed: '❌',
-      pending: '⏳',
-      approved: '✅',
-      rejected: '🚫',
-    }[item.status] ?? '⏳';
+      executed: '✓',
+      failed: '✗',
+      pending: '…',
+      approved: '✓',
+      rejected: '✗',
+    }[item.status] ?? '…';
     
+    const statusClass = {
+      executed: 'success',
+      approved: 'success',
+      failed: 'error',
+      rejected: 'error',
+      pending: 'pending',
+    }[item.status] ?? 'pending';
+
     const time = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     return `
       <div class="log-item">
-        <span class="log-item__icon">${statusIcon}</span>
+        <span class="log-item__icon status-${statusClass}">${statusIcon}</span>
         <span class="log-item__text">${escapeHtml(item.reason || item.type)}</span>
         <span class="log-item__time">${time}</span>
       </div>
@@ -144,6 +164,47 @@ function updateThemeUI(theme: string): void {
   dom.themeDark?.setAttribute('aria-pressed', String(!isLight));
 }
 
+function setupSidebarNav(): void {
+  const links = document.querySelectorAll<HTMLAnchorElement>('.nav-link[data-section]');
+  
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const sectionId = link.dataset.section;
+      if (!sectionId) return;
+
+      const section = document.getElementById(sectionId);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
+
+  // Track scroll position to highlight current nav link
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.card[id]'));
+  const content = document.querySelector('.content');
+  if (!content) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          links.forEach(l => {
+            l.classList.toggle('active', l.dataset.section === id);
+          });
+        }
+      });
+    },
+    { rootMargin: '-20% 0px -60% 0px' }
+  );
+
+  sections.forEach(section => observer.observe(section));
+}
+
 function setupEventListeners(): void {
   // Input changes
   const inputs = [
@@ -153,8 +214,8 @@ function setupEventListeners(): void {
   
   inputs.forEach(input => {
     if (input) {
-      input.addEventListener('input', showSaveButton);
-      input.addEventListener('change', showSaveButton);
+      input.addEventListener('input', showSaveBar);
+      input.addEventListener('change', showSaveBar);
     }
   });
 
@@ -162,7 +223,7 @@ function setupEventListeners(): void {
     if (currentSettings.theme !== 'dark') {
       currentSettings.theme = 'dark';
       updateThemeUI('dark');
-      showSaveButton();
+      showSaveBar();
     }
   });
 
@@ -170,7 +231,7 @@ function setupEventListeners(): void {
     if (currentSettings.theme !== 'light') {
       currentSettings.theme = 'light';
       updateThemeUI('light');
-      showSaveButton();
+      showSaveBar();
     }
   });
   
@@ -178,21 +239,25 @@ function setupEventListeners(): void {
     if (!dom.apiKeyInput || !dom.toggleApiKeyBtn) return;
     const type = dom.apiKeyInput.type === 'password' ? 'text' : 'password';
     dom.apiKeyInput.type = type;
-    dom.toggleApiKeyBtn.textContent = type === 'password' ? '👁️' : '🙈';
+    // Swap the eye icon
+    const svg = type === 'password'
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    dom.toggleApiKeyBtn.innerHTML = svg;
   });
   
   dom.testApiBtn?.addEventListener('click', async () => {
     if (!dom.apiKeyInput || !dom.testApiBtn || !dom.testApiStatus) return;
     const apiKey = dom.apiKeyInput.value.trim();
     if (!apiKey) {
-      dom.testApiStatus.textContent = '❌ API Key required';
-      dom.testApiStatus.className = 'api-status error';
+      dom.testApiStatus.textContent = 'API Key is required';
+      dom.testApiStatus.className = 'status-text error';
       return;
     }
     
     dom.testApiBtn.disabled = true;
-    dom.testApiStatus.textContent = '⏳ Testing...';
-    dom.testApiStatus.className = 'api-status loading';
+    dom.testApiStatus.textContent = 'Testing…';
+    dom.testApiStatus.className = 'status-text loading';
     
     try {
       // Temporarily set it
@@ -216,7 +281,7 @@ function setupEventListeners(): void {
           
           // Retry on transient errors (503 Service Unavailable / 429 Rate Limit)
           if ((res.status === 503 || res.status === 429) && i < retries - 1) {
-            console.warn(`[MailFlow-agent] Gemini API returned ${res.status}. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+            console.warn(`[MailFlow] Gemini API returned ${res.status}. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
             delayMs *= 2;
             continue;
@@ -224,16 +289,17 @@ function setupEventListeners(): void {
           break;
         } catch (err) {
           if (i === retries - 1) throw err;
-          console.warn(`[MailFlow-agent] Fetch failed. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+          console.warn(`[MailFlow] Fetch failed. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           delayMs *= 2;
         }
       }
       
       if (res && res.ok) {
-        dom.testApiStatus.textContent = '✅ Connection successful';
-        dom.testApiStatus.className = 'api-status success';
-        showSaveButton();
+        dom.testApiStatus.textContent = 'Connection successful';
+        dom.testApiStatus.className = 'status-text success';
+        showToast('API key verified successfully', 'success');
+        showSaveBar();
       } else {
         let reason = res ? `HTTP ${res.status}` : 'Unknown error';
         if (res) {
@@ -246,12 +312,12 @@ function setupEventListeners(): void {
             // keep HTTP status as fallback
           }
         }
-        dom.testApiStatus.textContent = `❌ ${reason}`;
-        dom.testApiStatus.className = 'api-status error';
+        dom.testApiStatus.textContent = reason;
+        dom.testApiStatus.className = 'status-text error';
       }
     } catch (e) {
-      dom.testApiStatus.textContent = '❌ Network error';
-      dom.testApiStatus.className = 'api-status error';
+      dom.testApiStatus.textContent = 'Network error';
+      dom.testApiStatus.className = 'status-text error';
     } finally {
       dom.testApiBtn.disabled = false;
     }
@@ -261,6 +327,7 @@ function setupEventListeners(): void {
     if (confirm('Are you sure you want to disconnect your Gmail account?')) {
       await sendToBackground({ type: MESSAGE_TYPES.AUTH_LOGOUT });
       await checkAuthStatus();
+      showToast('Account disconnected', 'success');
     }
   });
 
@@ -268,12 +335,14 @@ function setupEventListeners(): void {
     if (confirm('Are you sure you want to clear the action log?')) {
       await chrome.storage.local.set({ actionQueue_log: [] });
       renderActionLog([]);
+      showToast('Action log cleared', 'success');
     }
   });
   
-  dom.saveFloatBtn?.addEventListener('click', async () => {
-    if (!dom.saveFloatBtn) return;
-    dom.saveFloatBtn.textContent = 'Saving...';
+  dom.saveBtn?.addEventListener('click', async () => {
+    if (!dom.saveBtn) return;
+    dom.saveBtn.textContent = 'Saving…';
+    dom.saveBtn.disabled = true;
     
     const newSettings: Settings = {
       ...currentSettings,
@@ -294,24 +363,46 @@ function setupEventListeners(): void {
     });
     currentSettings = newSettings;
     
-    dom.saveFloatBtn.textContent = '✅ Saved';
-    setTimeout(() => {
-      hideSaveButton();
-    }, 2000);
+    showToast('Settings saved', 'success');
+    hideSaveBar();
+    dom.saveBtn.disabled = false;
+    dom.saveBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Save Changes
+    `;
   });
 }
 
-function showSaveButton(): void {
-  if (dom.saveFloatBtn) {
-    dom.saveFloatBtn.hidden = false;
-    dom.saveFloatBtn.textContent = 'Save Changes';
+function showSaveBar(): void {
+  if (dom.saveBar) {
+    dom.saveBar.hidden = false;
   }
 }
 
-function hideSaveButton(): void {
-  if (dom.saveFloatBtn) {
-    dom.saveFloatBtn.hidden = true;
+function hideSaveBar(): void {
+  if (dom.saveBar) {
+    dom.saveBar.hidden = true;
   }
+}
+
+function showToast(message: string, type: 'success' | 'error' = 'success'): void {
+  const container = dom.toastContainer;
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const icon = type === 'success'
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+
+  toast.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('removing');
+    toast.addEventListener('animationend', () => toast.remove());
+  }, 2800);
 }
 
 function sendToBackground(message: any): Promise<any> {
