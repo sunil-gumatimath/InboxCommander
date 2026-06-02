@@ -9,7 +9,8 @@
     "sidePanel",
     "tabs",
     "alarms",
-    "activeTab"
+    "activeTab",
+    "identity"
   ],
 
   "host_permissions": [
