@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "MailFlow-agent",
+  "name": "InboxCommander",
   "version": "1.0.0",
-  "description": "AI-powered email assistant that can read, summarize, classify, draft, reply, delete, archive, and label emails",
+  "description": "AI-powered email assistant that can read, summarize, classify, draft, reply, delete, archive, and label emails — InboxCommander",
 
   "permissions": [
     "storage",

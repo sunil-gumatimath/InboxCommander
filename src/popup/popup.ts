@@ -114,7 +114,7 @@ function setupEventListeners(): void {
             window.close();
           })
           .catch((e) => {
-            console.error('[MailFlow-agent] Failed to open side panel:', e);
+            console.error('[InboxCommander] Failed to open side panel:', e);
             window.close();
           });
       } else {
@@ -146,7 +146,7 @@ function setupEventListeners(): void {
             window.close();
           })
           .catch((e) => {
-            console.error('[MailFlow-agent] Failed to open side panel:', e);
+            console.error('[InboxCommander] Failed to open side panel:', e);
             window.close();
           });
       } else {

@@ -187,4 +187,4 @@ async function showNotification(text: string, level: string = 'info'): Promise<v
   }, 3000);
 }
 
-console.log('[MailFlow-agent] Content script loaded on Gmail.');
+console.log('[InboxCommander] Content script loaded on Gmail.');

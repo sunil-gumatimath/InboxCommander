@@ -1,6 +1,6 @@
 /**
  * background/service-worker.ts
- * Main background service worker — central message router for MailFlow-agent.
+ * Main background service worker — central message router for InboxCommander.
  *
  * All event listeners are registered at the top level (MV3 requirement).
  * Uses ES module imports from sibling modules.
@@ -46,7 +46,7 @@ import type { ExtensionResponse, ThreadMessageInput } from '../shared/types';
 // ── Install / Update ───────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDetails) => {
-  console.log(`[MailFlow-agent] Installed — reason: ${details.reason}`);
+  console.log(`[InboxCommander] Installed — reason: ${details.reason}`);
 
   // Seed default settings on first install
   if (details.reason === 'install') {
@@ -64,7 +64,7 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
 // ── Alarms (placeholder for future scheduled tasks) ────────────────────────────
 
 chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
-  console.log(`[MailFlow-agent] Alarm fired: ${alarm.name}`);
+  console.log(`[InboxCommander] Alarm fired: ${alarm.name}`);
   // Future: handle scheduled email checks, digest generation, etc.
 });
 
@@ -74,11 +74,12 @@ chrome.runtime.onMessage.addListener((message: any, _sender: chrome.runtime.Mess
   handleMessage(message)
     .then(sendResponse)
     .catch((err: any) => {
-      console.error(`[MailFlow-agent] Message handler error:`, err);
+      console.error(`[InboxCommander] Message handler error:`, err);
       sendResponse(createResponse(false, null, err.message));
     });
 
   // Return true — we WILL call sendResponse asynchronously
+
   return true;
 });
 
@@ -267,7 +268,7 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
                     category = classification.category || 'WORK';
                   }
                 } catch (aiErr) {
-                  console.warn('[MailFlow-agent] Context auto-classification failed:', aiErr);
+                  console.warn('[InboxCommander] Context auto-classification failed:', aiErr);
                 }
                 
                 chrome.runtime.sendMessage({
@@ -285,7 +286,7 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
               }
             }
           } catch (err) {
-            console.error('[MailFlow-agent] GMAIL_CONTEXT_CHANGE processing failed:', err);
+            console.error('[InboxCommander] GMAIL_CONTEXT_CHANGE processing failed:', err);
           }
         } else {
           chrome.runtime.sendMessage({
@@ -489,11 +490,11 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
 
       // ── Unknown ────────────────────────────────────────────────────────────
       default:
-        console.warn(`[MailFlow-agent] Unknown message type: ${type}`);
+        console.warn(`[InboxCommander] Unknown message type: ${type}`);
         return createResponse(false, null, `Unknown message type: ${type}`);
     }
   } catch (err: any) {
-    console.error(`[MailFlow-agent] Error handling ${type}:`, err);
+    console.error(`[InboxCommander] Error handling ${type}:`, err);
     return createResponse(false, null, err.message);
   }
 }

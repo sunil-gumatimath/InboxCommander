@@ -1,4 +1,4 @@
-# MailFlow Agent
+# InboxCommander
 
 Chrome extension (MV3) that reads, summarizes, classifies, drafts, replies to, and labels Gmail with Gemini.
 
