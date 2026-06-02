@@ -78,7 +78,7 @@ header {
 }
 
 .icon-btn:active {
-  background: rgba(22, 119, 255, 0.12);
+  background: var(--accent-active-soft);
 }
 
 /* ── Auth Section ─────────────────────────────────────────────── */
@@ -263,7 +263,7 @@ header {
 }
 
 .action-btn:active {
-  background: rgba(22, 119, 255, 0.12);
+  background: var(--accent-active-soft);
 }
 
 .action-btn .action-icon {
@@ -295,7 +295,7 @@ header {
 }
 
 .action-btn.accent:hover {
-  background: rgba(22, 119, 255, 0.12);
+  background: var(--accent-active-soft);
   border-color: var(--accent);
 }
 

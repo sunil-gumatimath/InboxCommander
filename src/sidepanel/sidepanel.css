@@ -88,7 +88,7 @@ header {
   background: var(--accent-soft);
 }
 
-.icon-btn:active { background: rgba(22, 119, 255, 0.12); }
+.icon-btn:active { background: var(--accent-active-soft); }
 
 /* ── Auth ─────────────────────────────────────────────────────── */
 .auth {
@@ -291,7 +291,7 @@ main {
   background: var(--accent-soft);
 }
 
-.chip:active { background: rgba(22, 119, 255, 0.12); }
+.chip:active { background: var(--accent-active-soft); }
 
 .chip.danger {
   color: var(--red);
