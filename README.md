@@ -4,10 +4,10 @@ Chrome extension (MV3) that reads, summarizes, classifies, drafts, replies to, a
 
 ## Load locally
 
-1. `chrome://extensions` → Developer mode → **Load unpacked**
-2. Select this folder
-3. Open the extension's **Options** page and paste your Gemini API key
-4. Open Gmail, click the toolbar icon → **Open side panel**
+1. Run `bun run build` to compile the TypeScript code (or `bun run dev` for development).
+2. Go to `chrome://extensions` → enable **Developer mode** → click **Load unpacked**.
+3. Select the **`dist`** folder (not the root project folder).
+4. Open the extension's **Options** page and paste your Gemini API key.
 
 ## Configure
 
