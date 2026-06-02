@@ -1,0 +1,18 @@
+{
+  "name": "email-agent",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.4.0",
+    "@types/bun": "latest",
+    "vite": "^8.0.16"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
