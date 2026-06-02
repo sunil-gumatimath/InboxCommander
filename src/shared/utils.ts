@@ -10,12 +10,12 @@ export async function applyStoredTheme(): Promise<'light' | 'dark'> {
     const { extension_settings } = (await chrome.storage.local.get('extension_settings')) as {
       extension_settings?: { theme?: 'light' | 'dark' };
     };
-    const theme: 'light' | 'dark' = extension_settings?.theme === 'light' ? 'light' : 'dark';
+    const theme: 'light' | 'dark' = extension_settings?.theme === 'dark' ? 'dark' : 'light';
     document.documentElement.dataset.theme = theme;
     return theme;
   } catch {
-    document.documentElement.dataset.theme = 'dark';
-    return 'dark';
+    document.documentElement.dataset.theme = 'light';
+    return 'light';
   }
 }
 

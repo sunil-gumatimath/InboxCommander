@@ -108,7 +108,7 @@ export const DEFAULT_SETTINGS = {
   emailSignature: '',
   userName: '',
   maxEmails: 50,
-  theme: 'dark',
+  theme: 'light',
 };
 
 // ─── Extension Info ──────────────────────────────────────────────
