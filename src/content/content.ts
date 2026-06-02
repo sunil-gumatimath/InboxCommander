@@ -1,23 +1,25 @@
 /**
- * content/content.js
+ * content/content.ts
  * Content script injected into mail.google.com
  * Detects Gmail navigation context and bridges DOM info to the service worker.
  */
 
 const GMAIL_THREAD_REGEX = /[#/](?:inbox|sent|drafts|starred|all|trash|spam|label\/[^/]+)\/([A-Za-z0-9]+)/;
-const GMAIL_COMPOSE_SELECTOR = 'div.nH div.no div.nH div.aeJ';
-const GMAIL_MESSAGE_LIST_SELECTOR = 'div[role="main"] table.F.cf.zt';
-const GMAIL_THREAD_VIEW_SELECTOR = 'div[role="main"] div.nH.if';
 
-let currentView = null; // 'inbox' | 'thread' | 'compose' | null
-let currentThreadId = null;
+let currentView: 'inbox' | 'thread' | 'compose' | null = null;
+let currentThreadId: string | null = null;
+
+interface GmailContext {
+  view: 'inbox' | 'thread' | 'compose';
+  threadId: string | null;
+}
 
 // ─── URL Parsing ─────────────────────────────────────────────────
-function parseGmailContext() {
+function parseGmailContext(): GmailContext {
   const hash = window.location.hash;
   const threadMatch = hash.match(GMAIL_THREAD_REGEX);
 
-  if (threadMatch) {
+  if (threadMatch && threadMatch[1]) {
     return { view: 'thread', threadId: threadMatch[1] };
   }
 
@@ -30,7 +32,7 @@ function parseGmailContext() {
 }
 
 // ─── Context Change Detection ────────────────────────────────────
-function onContextChange() {
+function onContextChange(): void {
   const ctx = parseGmailContext();
 
   if (ctx.view === currentView && ctx.threadId === currentThreadId) {
@@ -67,7 +69,7 @@ function onContextChange() {
 }
 
 // ─── Extract thread metadata from Gmail DOM ──────────────────────
-function extractThreadMetadata(threadId) {
+function extractThreadMetadata(threadId: string): void {
   // Wait for the thread view to render
   setTimeout(() => {
     try {
@@ -116,7 +118,7 @@ const observer = new MutationObserver((mutations) => {
 });
 
 // Start observing once Gmail's main container is ready
-function startObserving() {
+function startObserving(): boolean {
   const mainEl = document.querySelector('div[role="main"]');
   if (mainEl) {
     observer.observe(mainEl, { childList: true, subtree: true });
@@ -137,7 +139,7 @@ if (!startObserving()) {
 }
 
 // ─── Listen for messages from service worker ─────────────────────
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
   switch (message.type) {
     case 'GET_CURRENT_CONTEXT':
       sendResponse({
@@ -156,13 +158,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 // ─── In-page notification (subtle) ───────────────────────────────
-function showNotification(text, level = 'info') {
+async function showNotification(text: string, level: string = 'info'): Promise<void> {
   const existing = document.getElementById('gmail-ai-notification');
   if (existing) existing.remove();
+
+  let theme = 'dark';
+  try {
+    const res = (await chrome.storage.local.get('extension_settings')) as {
+      extension_settings?: { theme?: 'light' | 'dark' };
+    };
+    if (res?.extension_settings?.theme === 'light') {
+      theme = 'light';
+    }
+  } catch (e) {
+    // Default to dark theme on error
+  }
 
   const el = document.createElement('div');
   el.id = 'gmail-ai-notification';
   el.className = `gmail-ai-notif gmail-ai-notif--${level}`;
+  el.setAttribute('data-theme', theme);
   el.textContent = text;
   document.body.appendChild(el);
 

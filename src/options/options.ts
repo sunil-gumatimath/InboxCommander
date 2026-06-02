@@ -1,92 +1,109 @@
 /**
- * options/options.js
+ * options/options.ts
  * Settings page logic
  */
 
-import { DEFAULT_SETTINGS, MESSAGE_TYPES } from '../shared/constants.js';
+import { DEFAULT_SETTINGS, MESSAGE_TYPES } from '../shared/constants';
+import type { Settings } from '../shared/types';
+import { applyStoredTheme } from '../shared/utils';
 
-const $ = (sel) => document.querySelector(sel);
+const $ = <T extends Element = HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
 
 const dom = {
-  apiKeyInput: $('#apiKey'),
-  toggleApiKeyBtn: $('#toggleApiKey'),
-  testApiBtn: $('#testApiBtn'),
-  testApiStatus: $('#apiStatus'),
+  get apiKeyInput() { return $('#apiKey') as HTMLInputElement | null; },
+  get toggleApiKeyBtn() { return $('#toggleApiKey') as HTMLButtonElement | null; },
+  get testApiBtn() { return $('#testApiBtn') as HTMLButtonElement | null; },
+  get testApiStatus() { return $('#apiStatus'); },
   
-  approveLow: $('#approvalLow'),
-  approveMedium: $('#approvalMedium'),
-  approveHigh: $('#approvalHigh'),
+  get approveLow() { return $('#approvalLow') as HTMLInputElement | null; },
+  get approveMedium() { return $('#approvalMedium') as HTMLInputElement | null; },
+  get approveHigh() { return $('#approvalHigh') as HTMLInputElement | null; },
   
-  toneSelect: $('#writingTone'),
-  signatureText: $('#emailSignature'),
-  userName: $('#userName'),
+  get toneSelect() { return $('#writingTone') as HTMLSelectElement | null; },
+  get signatureText() { return $('#emailSignature') as HTMLTextAreaElement | null; },
+  get userName() { return $('#userName') as HTMLInputElement | null; },
   
-  maxEmails: $('#maxEmails'),
+  get maxEmails() { return $('#maxEmails') as HTMLInputElement | null; },
   
-  connectedEmail: $('#accountEmail'),
-  disconnectBtn: $('#disconnectBtn'),
+  get connectedEmail() { return $('#accountEmail'); },
+  get disconnectBtn() { return $('#disconnectBtn') as HTMLButtonElement | null; },
   
-  saveFloatBtn: $('#saveBtn'),
-  themeDark: $('#themeDark'),
-  themeLight: $('#themeLight'),
+  get saveFloatBtn() { return $('#saveBtn') as HTMLButtonElement | null; },
+  get themeDark() { return $('#themeDark'); },
+  get themeLight() { return $('#themeLight'); },
   
-  clearLogBtn: $('#clearLogBtn'),
-  actionLog: $('#actionLog'),
+  get clearLogBtn() { return $('#clearLogBtn') as HTMLButtonElement | null; },
+  get actionLog() { return $('#actionLog'); },
 };
 
-let currentSettings = { ...DEFAULT_SETTINGS };
+let currentSettings: Settings = { ...DEFAULT_SETTINGS };
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initOptions(): Promise<void> {
+  await applyStoredTheme();
   await loadSettings();
   await checkAuthStatus();
   await loadActionLog();
   setupEventListeners();
-});
+}
 
-async function loadSettings() {
-  const { extension_settings } = await chrome.storage.local.get('extension_settings');
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initOptions);
+} else {
+  initOptions();
+}
+
+async function loadSettings(): Promise<void> {
+  const { extension_settings } = (await chrome.storage.local.get('extension_settings')) as { extension_settings?: Partial<Settings> };
   if (extension_settings) {
     currentSettings = { ...DEFAULT_SETTINGS, ...extension_settings };
   }
   
   // Populate UI
-  const { geminiApiKey } = await chrome.storage.local.get('geminiApiKey');
-  if (geminiApiKey) dom.apiKeyInput.value = geminiApiKey;
+  const { geminiApiKey } = (await chrome.storage.local.get('geminiApiKey')) as { geminiApiKey?: string };
+  if (geminiApiKey && dom.apiKeyInput) dom.apiKeyInput.value = geminiApiKey;
   
-  dom.approveLow.checked = currentSettings.approvalRequired.low;
-  dom.approveMedium.checked = currentSettings.approvalRequired.medium;
-  dom.approveHigh.checked = currentSettings.approvalRequired.high;
+  if (dom.approveLow) dom.approveLow.checked = currentSettings.approvalRequired.low;
+  if (dom.approveMedium) dom.approveMedium.checked = currentSettings.approvalRequired.medium;
+  if (dom.approveHigh) dom.approveHigh.checked = currentSettings.approvalRequired.high;
   
-  dom.toneSelect.value = currentSettings.writingTone || 'professional';
-  dom.signatureText.value = currentSettings.emailSignature || '';
-  dom.userName.value = currentSettings.userName || '';
-  dom.maxEmails.value = currentSettings.maxEmails || 50;
+  if (dom.toneSelect) dom.toneSelect.value = currentSettings.writingTone || 'professional';
+  if (dom.signatureText) dom.signatureText.value = currentSettings.emailSignature || '';
+  if (dom.userName) dom.userName.value = currentSettings.userName || '';
+  if (dom.maxEmails) dom.maxEmails.value = String(currentSettings.maxEmails || 50);
 
   updateThemeUI(currentSettings.theme || 'dark');
 }
 
-async function checkAuthStatus() {
+async function checkAuthStatus(): Promise<void> {
   try {
     const response = await sendToBackground({ type: MESSAGE_TYPES.AUTH_STATUS });
     if (response?.authenticated) {
-      dom.connectedEmail.textContent = response.email || 'Connected';
-      dom.disconnectBtn.hidden = false;
+      if (dom.connectedEmail) dom.connectedEmail.textContent = response.email || 'Connected';
+      if (dom.disconnectBtn) dom.disconnectBtn.hidden = false;
     } else {
-      dom.connectedEmail.textContent = 'Not connected';
-      dom.disconnectBtn.hidden = true;
+      if (dom.connectedEmail) dom.connectedEmail.textContent = 'Not connected';
+      if (dom.disconnectBtn) dom.disconnectBtn.hidden = true;
     }
   } catch {
-    dom.connectedEmail.textContent = 'Not connected';
-    dom.disconnectBtn.hidden = true;
+    if (dom.connectedEmail) dom.connectedEmail.textContent = 'Not connected';
+    if (dom.disconnectBtn) dom.disconnectBtn.hidden = true;
   }
 }
 
-async function loadActionLog() {
-  const { actionQueue_log } = await chrome.storage.local.get('actionQueue_log');
+async function loadActionLog(): Promise<void> {
+  const { actionQueue_log } = (await chrome.storage.local.get('actionQueue_log')) as { actionQueue_log?: LogItem[] };
   renderActionLog(actionQueue_log ?? []);
 }
 
-function renderActionLog(log) {
+interface LogItem {
+  status: 'executed' | 'failed' | 'pending' | 'approved' | 'rejected' | string;
+  timestamp: number;
+  reason?: string;
+  type: string;
+}
+
+function renderActionLog(log: LogItem[]): void {
+  if (!dom.actionLog) return;
   if (!log || !log.length) {
     dom.actionLog.innerHTML = `
       <div class="empty-state">
@@ -118,17 +135,16 @@ function renderActionLog(log) {
   }).join('');
 }
 
-function updateThemeUI(theme) {
-  if (theme === 'light') {
-    dom.themeLight.classList.add('active');
-    dom.themeDark.classList.remove('active');
-  } else {
-    dom.themeDark.classList.add('active');
-    dom.themeLight.classList.remove('active');
-  }
+function updateThemeUI(theme: string): void {
+  const isLight = theme === 'light';
+  document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
+  dom.themeLight?.classList.toggle('active', isLight);
+  dom.themeDark?.classList.toggle('active', !isLight);
+  dom.themeLight?.setAttribute('aria-pressed', String(isLight));
+  dom.themeDark?.setAttribute('aria-pressed', String(!isLight));
 }
 
-function setupEventListeners() {
+function setupEventListeners(): void {
   // Input changes
   const inputs = [
     dom.apiKeyInput, dom.approveLow, dom.approveMedium, dom.approveHigh,
@@ -136,11 +152,13 @@ function setupEventListeners() {
   ];
   
   inputs.forEach(input => {
-    input.addEventListener('input', showSaveButton);
-    input.addEventListener('change', showSaveButton);
+    if (input) {
+      input.addEventListener('input', showSaveButton);
+      input.addEventListener('change', showSaveButton);
+    }
   });
 
-  dom.themeDark.addEventListener('click', () => {
+  dom.themeDark?.addEventListener('click', () => {
     if (currentSettings.theme !== 'dark') {
       currentSettings.theme = 'dark';
       updateThemeUI('dark');
@@ -148,7 +166,7 @@ function setupEventListeners() {
     }
   });
 
-  dom.themeLight.addEventListener('click', () => {
+  dom.themeLight?.addEventListener('click', () => {
     if (currentSettings.theme !== 'light') {
       currentSettings.theme = 'light';
       updateThemeUI('light');
@@ -156,13 +174,15 @@ function setupEventListeners() {
     }
   });
   
-  dom.toggleApiKeyBtn.addEventListener('click', () => {
+  dom.toggleApiKeyBtn?.addEventListener('click', () => {
+    if (!dom.apiKeyInput || !dom.toggleApiKeyBtn) return;
     const type = dom.apiKeyInput.type === 'password' ? 'text' : 'password';
     dom.apiKeyInput.type = type;
     dom.toggleApiKeyBtn.textContent = type === 'password' ? '👁️' : '🙈';
   });
   
-  dom.testApiBtn.addEventListener('click', async () => {
+  dom.testApiBtn?.addEventListener('click', async () => {
+    if (!dom.apiKeyInput || !dom.testApiBtn || !dom.testApiStatus) return;
     const apiKey = dom.apiKeyInput.value.trim();
     if (!apiKey) {
       dom.testApiStatus.textContent = '❌ API Key required';
@@ -177,8 +197,8 @@ function setupEventListeners() {
     try {
       // Temporarily set it
       await chrome.storage.local.set({ geminiApiKey: apiKey });
-      let res;
-      let retries = 3;
+      let res: Response | undefined;
+      const retries = 3;
       let delayMs = 1000;
       for (let i = 0; i < retries; i++) {
         try {
@@ -237,39 +257,40 @@ function setupEventListeners() {
     }
   });
   
-  dom.disconnectBtn.addEventListener('click', async () => {
+  dom.disconnectBtn?.addEventListener('click', async () => {
     if (confirm('Are you sure you want to disconnect your Gmail account?')) {
       await sendToBackground({ type: MESSAGE_TYPES.AUTH_LOGOUT });
       await checkAuthStatus();
     }
   });
 
-  dom.clearLogBtn.addEventListener('click', async () => {
+  dom.clearLogBtn?.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear the action log?')) {
       await chrome.storage.local.set({ actionQueue_log: [] });
       renderActionLog([]);
     }
   });
   
-  dom.saveFloatBtn.addEventListener('click', async () => {
+  dom.saveFloatBtn?.addEventListener('click', async () => {
+    if (!dom.saveFloatBtn) return;
     dom.saveFloatBtn.textContent = 'Saving...';
     
-    const newSettings = {
+    const newSettings: Settings = {
       ...currentSettings,
       approvalRequired: {
-        low: dom.approveLow.checked,
-        medium: dom.approveMedium.checked,
-        high: dom.approveHigh.checked,
+        low: dom.approveLow?.checked ?? false,
+        medium: dom.approveMedium?.checked ?? true,
+        high: dom.approveHigh?.checked ?? true,
       },
-      writingTone: dom.toneSelect.value,
-      emailSignature: dom.signatureText.value,
-      userName: dom.userName.value,
-      maxEmails: parseInt(dom.maxEmails.value, 10) || 50,
+      writingTone: dom.toneSelect?.value ?? 'professional',
+      emailSignature: dom.signatureText?.value ?? '',
+      userName: dom.userName?.value ?? '',
+      maxEmails: parseInt(dom.maxEmails?.value || '50', 10) || 50,
     };
     
     await chrome.storage.local.set({ 
       extension_settings: newSettings,
-      geminiApiKey: dom.apiKeyInput.value.trim() 
+      geminiApiKey: dom.apiKeyInput?.value.trim() ?? ''
     });
     currentSettings = newSettings;
     
@@ -280,16 +301,20 @@ function setupEventListeners() {
   });
 }
 
-function showSaveButton() {
-  dom.saveFloatBtn.hidden = false;
-  dom.saveFloatBtn.textContent = 'Save Changes';
+function showSaveButton(): void {
+  if (dom.saveFloatBtn) {
+    dom.saveFloatBtn.hidden = false;
+    dom.saveFloatBtn.textContent = 'Save Changes';
+  }
 }
 
-function hideSaveButton() {
-  dom.saveFloatBtn.hidden = true;
+function hideSaveButton(): void {
+  if (dom.saveFloatBtn) {
+    dom.saveFloatBtn.hidden = true;
+  }
 }
 
-function sendToBackground(message) {
+function sendToBackground(message: any): Promise<any> {
   const { type, ...rest } = message;
   const wrappedMessage = {
     type,
@@ -312,7 +337,7 @@ function sendToBackground(message) {
   });
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: string): string {
   if (typeof str !== 'string') return '';
   const div = document.createElement('div');
   div.textContent = str;
