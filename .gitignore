@@ -40,3 +40,13 @@ pnpm-lock.yaml
 # ── Logs ────────────────────────────────────────────────────────
 *.log
 logs/
+
+# ── Chrome Extension Dev Artifacts (generated at root by CRX plugin) ──
+/assets/
+/content/
+/options/
+/popup/
+/sidepanel/
+/manifest.json
+/service-worker-loader.js
+
