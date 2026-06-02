@@ -1,5 +1,5 @@
 /**
- * MailFlow-agent — Side Panel Logic
+ * InboxCommander — Side Panel Logic
  * Main AI chat interface controller
  */
 
@@ -88,6 +88,7 @@ function updateAuthUI(authenticated: boolean, email?: string | null): void {
     }
     fetchPendingApprovals();
     fetchActionHistory();
+    requestCurrentEmailContext();
   } else {
     if (dom.authSection) dom.authSection.hidden = false;
     if (dom.mainContent) dom.mainContent.hidden = true;
@@ -175,7 +176,7 @@ function addMessage(role: string, text: string): void {
       }
     </div>
     <div class="message__content">
-      <div class="message__role">${role === 'user' ? 'You' : 'MailFlow-agent'}</div>
+      <div class="message__role">${role === 'user' ? 'You' : 'InboxCommander'}</div>
       <div class="message__text">${escapeHtml(text)}</div>
       <div class="message__time">${timestamp}</div>
     </div>
@@ -275,25 +276,65 @@ async function runInboxAction(type: string, label: string): Promise<void> {
 }
 
 // ─── Email Context ───────────────────────────────────────────────
-function updateEmailContext(context: EmailContext | null): void {
-  currentEmailContext = context;
+/**
+ * Ask the active Gmail tab for the email currently open, then have the
+ * service worker rebuild and broadcast the full context (including the body).
+ * Needed when the side panel is opened *after* an email is already open —
+ * the content script only broadcasts on navigation changes.
+ */
+async function requestCurrentEmailContext(): Promise<void> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !tab.url?.includes('mail.google.com')) return;
 
+    const ctx = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CURRENT_CONTEXT' });
+    if (ctx?.view === 'thread' && ctx.threadId) {
+      // Triggers EMAIL_CONTEXT_UPDATE broadcast from the service worker.
+      await sendToBackground({
+        type: 'GMAIL_CONTEXT_CHANGE',
+        context: { view: 'thread', threadId: ctx.threadId, url: ctx.url },
+      });
+    }
+  } catch {
+    // Content script may not be injected, or the tab isn't Gmail.
+  }
+}
+
+function updateEmailContext(context: EmailContext | null): void {
   if (!context) {
+    currentEmailContext = null;
     if (dom.emailContext) dom.emailContext.hidden = true;
     return;
   }
 
-  if (dom.emailContext) dom.emailContext.hidden = false;
-  if (dom.ctxFrom) dom.ctxFrom.textContent = context.from ?? '—';
-  if (dom.ctxSubject) dom.ctxSubject.textContent = context.subject ?? '—';
+  // Merge updates for the same thread so a later, partial update (e.g. one
+  // emitted by the content script without the email body) can't wipe richer
+  // data we already received from the service worker.
+  if (currentEmailContext && currentEmailContext.threadId === context.threadId) {
+    currentEmailContext = {
+      ...currentEmailContext,
+      ...context,
+      emailId: context.emailId ?? currentEmailContext.emailId,
+      body: context.body ?? currentEmailContext.body,
+      priority: context.priority ?? currentEmailContext.priority,
+      category: context.category ?? currentEmailContext.category,
+    };
+  } else {
+    currentEmailContext = context;
+  }
 
-  const priority = context.priority ?? 'NORMAL';
+  const ctx = currentEmailContext;
+  if (dom.emailContext) dom.emailContext.hidden = false;
+  if (dom.ctxFrom) dom.ctxFrom.textContent = ctx.from ?? '—';
+  if (dom.ctxSubject) dom.ctxSubject.textContent = ctx.subject ?? '—';
+
+  const priority = ctx.priority ?? 'NORMAL';
   if (dom.ctxPriority) {
     dom.ctxPriority.textContent = priority;
     (dom.ctxPriority as HTMLElement).dataset.priority = priority;
   }
 
-  const category = context.category ?? 'WORK';
+  const category = ctx.category ?? 'WORK';
   if (dom.ctxCategory) {
     dom.ctxCategory.textContent = category;
     (dom.ctxCategory as HTMLElement).dataset.category = category;
@@ -499,7 +540,7 @@ function setupEventListeners(): void {
         <div class="message message--agent fade-in">
           <div class="message__avatar">✦</div>
           <div class="message__content">
-            <div class="message__role">MailFlow</div>
+            <div class="message__role">InboxCommander</div>
             <div class="message__text">👋 Hello! I can summarize emails, draft replies, search your inbox, and more. What would you like to do?</div>
             <div class="message__time">Just now</div>
           </div>
@@ -617,7 +658,7 @@ async function loadConversationHistory(): Promise<void> {
             }
           </div>
           <div class="message__content">
-            <div class="message__role">${role === 'user' ? 'You' : 'MailFlow-agent'}</div>
+            <div class="message__role">${role === 'user' ? 'You' : 'InboxCommander'}</div>
             <div class="message__text">${escapeHtml(text)}</div>
             <div class="message__time">${timestamp}</div>
           </div>
