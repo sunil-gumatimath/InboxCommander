@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════
-   Content Script — Premium Glassmorphic Notifications
+   Content Script — Ant Design Style Notifications
    Injected into mail.google.com by Chrome.
    Vite will inline these @imports at build time.
    ══════════════════════════════════════════════════════════════════ */
@@ -12,25 +12,20 @@
   bottom: 16px;
   right: 16px;
   background: var(--bg-surface);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   color: var(--text-primary);
-  padding: 14px 22px 14px 18px;
-  border-radius: var(--radius-lg);
+  padding: 12px 20px 12px 16px;
+  border-radius: var(--radius-md);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   z-index: 999999;
-  box-shadow:
-    var(--shadow-lg),
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   gap: 10px;
   max-width: 340px;
-  animation: notifSlideIn 0.4s var(--ease-spring) forwards;
-  overflow: hidden;
+  animation: notifSlideIn 0.3s var(--ease-out) forwards;
 }
 
 /* Left accent bar */
@@ -41,19 +36,8 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(180deg, var(--accent), var(--violet));
+  background: var(--accent);
   border-radius: 3px 0 0 3px;
-}
-
-/* Top luminous edge */
-.gmail-ai-notif::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 12px;
-  right: 12px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.2), transparent);
 }
 
 .gmail-ai-notif--error {
@@ -61,7 +45,7 @@
 }
 
 .gmail-ai-notif--error::before {
-  background: linear-gradient(180deg, var(--red), #ef4444);
+  background: var(--red);
 }
 
 .gmail-ai-notif--success {
@@ -69,11 +53,11 @@
 }
 
 .gmail-ai-notif--success::before {
-  background: linear-gradient(180deg, var(--green), #22c55e);
+  background: var(--green);
 }
 
 .gmail-ai-notif--hide {
-  animation: notifSlideOut 0.35s var(--ease-out) forwards;
+  animation: notifSlideOut 0.3s var(--ease-out) forwards;
 }
 
 /* Monospace text support */
@@ -81,4 +65,3 @@
 .gmail-ai-notif .mono {
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
-
