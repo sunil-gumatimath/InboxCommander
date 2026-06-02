@@ -103,29 +103,22 @@ function setupEventListeners(): void {
   dom.btnOpenPanel?.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const activeTab = tabs[0];
-      if (activeTab?.url?.includes('mail.google.com')) {
-        if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function' && activeTab.id !== undefined) {
-          chrome.sidePanel.open({ tabId: activeTab.id })
-            .then(() => window.close())
-            .catch((e) => {
-              console.error('[MailFlow-agent] Failed to open side panel:', e);
-              window.close();
-            });
-        } else {
-          window.close();
-        }
-      } else {
-        chrome.tabs.create({ url: 'https://mail.google.com' }, (newTab) => {
-          const listener = (tabId: number, changeInfo: any) => {
-            if (tabId === newTab.id && changeInfo.status === 'complete') {
-              chrome.tabs.onUpdated.removeListener(listener);
-              if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
-                chrome.sidePanel.open({ tabId }).catch(() => {});
-              }
+      if (!activeTab || activeTab.id === undefined) return;
+
+      if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
+        chrome.sidePanel.open({ tabId: activeTab.id })
+          .then(() => {
+            if (!activeTab.url?.includes('mail.google.com')) {
+              chrome.tabs.update(activeTab.id, { url: 'https://mail.google.com' });
             }
-          };
-          chrome.tabs.onUpdated.addListener(listener);
-        });
+            window.close();
+          })
+          .catch((e) => {
+            console.error('[MailFlow-agent] Failed to open side panel:', e);
+            window.close();
+          });
+      } else {
+        window.close();
       }
     });
   });
@@ -135,41 +128,29 @@ function setupEventListeners(): void {
       await chrome.storage.session.set({ pendingQuickAction: actionText });
     } catch (e) {}
 
-    chrome.tabs.query({ url: '*://mail.google.com/*' }, (tabs) => {
-      if (tabs.length > 0) {
-        const gmailTab = tabs[0];
-        if (gmailTab && gmailTab.id !== undefined) {
-          chrome.tabs.update(gmailTab.id, { active: true });
-          if (gmailTab.windowId !== undefined) {
-            chrome.windows.update(gmailTab.windowId, { focused: true });
-          }
-          
-          if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
-            chrome.sidePanel.open({ tabId: gmailTab.id })
-              .then(() => {
-                chrome.runtime.sendMessage({
-                  type: 'TRIGGER_QUICK_ACTION',
-                  action: actionText
-                }).catch(() => {});
-                window.close();
-              })
-              .catch(() => window.close());
-          } else {
-            window.close();
-          }
-        }
-      } else {
-        chrome.tabs.create({ url: 'https://mail.google.com' }, (newTab) => {
-          const listener = (tabId: number, changeInfo: any) => {
-            if (tabId === newTab.id && changeInfo.status === 'complete') {
-              chrome.tabs.onUpdated.removeListener(listener);
-              if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
-                chrome.sidePanel.open({ tabId }).catch(() => {});
-              }
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs[0];
+      if (!activeTab || activeTab.id === undefined) return;
+
+      if (chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
+        chrome.sidePanel.open({ tabId: activeTab.id })
+          .then(() => {
+            if (!activeTab.url?.includes('mail.google.com')) {
+              chrome.tabs.update(activeTab.id, { url: 'https://mail.google.com' });
+            } else {
+              chrome.runtime.sendMessage({
+                type: 'TRIGGER_QUICK_ACTION',
+                action: actionText
+              }).catch(() => {});
             }
-          };
-          chrome.tabs.onUpdated.addListener(listener);
-        });
+            window.close();
+          })
+          .catch((e) => {
+            console.error('[MailFlow-agent] Failed to open side panel:', e);
+            window.close();
+          });
+      } else {
+        window.close();
       }
     });
   };

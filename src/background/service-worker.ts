@@ -55,24 +55,6 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
     await chrome.sidePanel.setOptions({ enabled: true });
   }
 });
-
-// ── Side-panel: enable only on mail.google.com tabs ────────────────────────────
-
-chrome.tabs.onUpdated.addListener(async (tabId: number, _changeInfo: any, tab: chrome.tabs.Tab) => {
-  if (!chrome.sidePanel?.setOptions) return;
-
-  const isGmail = tab.url?.startsWith('https://mail.google.com') ?? false;
-
-  try {
-    await chrome.sidePanel.setOptions({
-      tabId,
-      enabled: isGmail,
-    });
-  } catch {
-    // Tab may have been closed — ignore
-  }
-});
-
 // ── Alarms (placeholder for future scheduled tasks) ────────────────────────────
 
 chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
