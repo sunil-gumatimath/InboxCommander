@@ -1,12 +1,13 @@
 /**
- * background/action-queue.js
+ * background/action-queue.ts
  * Action queue with approval system.
  * Persists pending actions and an audit log in chrome.storage.local.
  */
 
-import { DEFAULT_SETTINGS, RISK_LEVELS } from '../shared/constants.js';
-import { generateId } from '../shared/utils.js';
-import * as gmailApi from './gmail-api.js';
+import { DEFAULT_SETTINGS, RISK_LEVELS } from '../shared/constants';
+import { generateId } from '../shared/utils';
+import * as gmailApi from './gmail-api';
+import type { Settings, QueuedAction } from '../shared/types';
 
 // ── Storage keys ───────────────────────────────────────────────────────────────
 const STORAGE_KEYS = {
@@ -18,13 +19,14 @@ const STORAGE_KEYS = {
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 /** Retrieve extension settings (merged with defaults). */
-export async function getSettings() {
-  const { [STORAGE_KEYS.SETTINGS]: stored } = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
+export async function getSettings(): Promise<Settings> {
+  const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
+  const stored = result[STORAGE_KEYS.SETTINGS] as Partial<Settings> | undefined;
   return { ...DEFAULT_SETTINGS, ...stored };
 }
 
 /** Persist updated settings. */
-export async function updateSettings(settings) {
+export async function updateSettings(settings: Partial<Settings>): Promise<Settings> {
   const current = await getSettings();
   const merged = { ...current, ...settings };
   await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: merged });
@@ -34,7 +36,7 @@ export async function updateSettings(settings) {
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
 /** Check whether user approval is needed for a given risk level. */
-async function isApprovalRequired(riskLevel) {
+async function isApprovalRequired(riskLevel: string): Promise<boolean> {
   const settings = await getSettings();
   const approval = settings.approvalRequired ?? DEFAULT_SETTINGS.approvalRequired;
 
@@ -47,19 +49,21 @@ async function isApprovalRequired(riskLevel) {
 }
 
 /** Read the pending-actions array from storage. */
-async function readPending() {
-  const { [STORAGE_KEYS.PENDING]: pending } = await chrome.storage.local.get(STORAGE_KEYS.PENDING);
+async function readPending(): Promise<QueuedAction[]> {
+  const result = (await chrome.storage.local.get(STORAGE_KEYS.PENDING)) as { [key: string]: QueuedAction[] | undefined };
+  const pending = result[STORAGE_KEYS.PENDING];
   return pending ?? [];
 }
 
 /** Write the pending-actions array to storage. */
-async function writePending(pending) {
+async function writePending(pending: QueuedAction[]): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.PENDING]: pending });
 }
 
 /** Append an entry to the action log. */
-async function appendLog(entry) {
-  const { [STORAGE_KEYS.LOG]: log } = await chrome.storage.local.get(STORAGE_KEYS.LOG);
+async function appendLog(entry: QueuedAction): Promise<void> {
+  const result = (await chrome.storage.local.get(STORAGE_KEYS.LOG)) as { [key: string]: QueuedAction[] | undefined };
+  const log = result[STORAGE_KEYS.LOG];
   const updated = [entry, ...(log ?? [])];
   // Keep the log from growing unbounded — retain last 500 entries
   await chrome.storage.local.set({ [STORAGE_KEYS.LOG]: updated.slice(0, 500) });
@@ -69,10 +73,10 @@ async function appendLog(entry) {
 
 /**
  * Map an action type to the corresponding gmail-api function and execute it.
- * @param {object} action — { type, params }
- * @returns {Promise<*>} API result
+ * @param action — { type, params }
+ * @returns API result
  */
-async function executeActionInternal(action) {
+async function executeActionInternal(action: QueuedAction): Promise<any> {
   const { type, params } = action;
 
   switch (type) {
@@ -107,17 +111,19 @@ async function executeActionInternal(action) {
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
+interface QueueActionOptions {
+  type: string;
+  params: any;
+  reason?: string;
+  riskLevel?: string;
+}
+
 /**
  * Queue an action. If approval is not required, it executes immediately.
- * @param {object} opts
- * @param {string} opts.type       — action type (e.g. 'SEND_EMAIL')
- * @param {object} opts.params     — action-specific parameters
- * @param {string} opts.reason     — human-readable reason
- * @param {string} opts.riskLevel  — RISK_LEVELS value
- * @returns {Promise<object>} the action record
+ * @returns the action record
  */
-export async function queueAction({ type, params, reason = '', riskLevel = RISK_LEVELS.HIGH }) {
-  const action = {
+export async function queueAction({ type, params, reason = '', riskLevel = RISK_LEVELS.HIGH }: QueueActionOptions): Promise<QueuedAction> {
+  const action: QueuedAction = {
     id: generateId(),
     type,
     params,
@@ -149,14 +155,14 @@ export async function queueAction({ type, params, reason = '', riskLevel = RISK_
 /**
  * Get all pending (unapproved) actions.
  */
-export async function getPendingActions() {
+export async function getPendingActions(): Promise<QueuedAction[]> {
   return readPending();
 }
 
 /**
  * Approve a pending action — execute it and log the result.
  */
-export async function approveAction(actionId) {
+export async function approveAction(actionId: string): Promise<QueuedAction> {
   const pending = await readPending();
   const index = pending.findIndex((a) => a.id === actionId);
 
@@ -164,7 +170,12 @@ export async function approveAction(actionId) {
     throw new Error(`Action ${actionId} not found in pending queue`);
   }
 
-  const action = { ...pending[index], status: 'approved' };
+  const found = pending[index];
+  if (!found) {
+    throw new Error(`Action ${actionId} data not found`);
+  }
+
+  const action: QueuedAction = { ...found, status: 'approved' };
   pending.splice(index, 1);
   await writePending(pending);
 
@@ -174,7 +185,7 @@ export async function approveAction(actionId) {
 /**
  * Reject a pending action.
  */
-export async function rejectAction(actionId) {
+export async function rejectAction(actionId: string): Promise<QueuedAction> {
   const pending = await readPending();
   const index = pending.findIndex((a) => a.id === actionId);
 
@@ -182,8 +193,13 @@ export async function rejectAction(actionId) {
     throw new Error(`Action ${actionId} not found in pending queue`);
   }
 
-  const action = {
-    ...pending[index],
+  const found = pending[index];
+  if (!found) {
+    throw new Error(`Action ${actionId} data not found`);
+  }
+
+  const action: QueuedAction = {
+    ...found,
     status: 'rejected',
     completedAt: Date.now(),
   };
@@ -198,10 +214,10 @@ export async function rejectAction(actionId) {
 /**
  * Execute an action, log the outcome, and return the updated action record.
  */
-export async function executeAction(action) {
+export async function executeAction(action: QueuedAction): Promise<QueuedAction> {
   try {
     const result = await executeActionInternal(action);
-    const completed = {
+    const completed: QueuedAction = {
       ...action,
       status: 'executed',
       completedAt: Date.now(),
@@ -209,8 +225,8 @@ export async function executeAction(action) {
     };
     await appendLog(completed);
     return completed;
-  } catch (err) {
-    const failed = {
+  } catch (err: any) {
+    const failed: QueuedAction = {
       ...action,
       status: 'failed',
       completedAt: Date.now(),
@@ -221,18 +237,15 @@ export async function executeAction(action) {
   }
 }
 
-/**
- * Retrieve the action log (most recent first).
- * @param {number} limit — max entries to return (default 50)
- */
-export async function getActionLog(limit = 50) {
-  const { [STORAGE_KEYS.LOG]: log } = await chrome.storage.local.get(STORAGE_KEYS.LOG);
+export async function getActionLog(limit: number = 50): Promise<QueuedAction[]> {
+  const result = (await chrome.storage.local.get(STORAGE_KEYS.LOG)) as { [key: string]: QueuedAction[] | undefined };
+  const log = result[STORAGE_KEYS.LOG];
   return (log ?? []).slice(0, limit);
 }
 
 /**
  * Clear the entire action log.
  */
-export async function clearActionLog() {
+export async function clearActionLog(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.LOG]: [] });
 }

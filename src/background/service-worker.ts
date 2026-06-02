@@ -1,22 +1,22 @@
 /**
- * background/service-worker.js
+ * background/service-worker.ts
  * Main background service worker — central message router for MailFlow-agent.
  *
  * All event listeners are registered at the top level (MV3 requirement).
  * Uses ES module imports from sibling modules.
  */
 
-import { MESSAGE_TYPES, DEFAULT_SETTINGS, RISK_LEVELS } from '../shared/constants.js';
-import { createResponse } from '../shared/message-types.js';
-import { parseEmailBody, extractHeaders, sanitizeForAI, createMimeMessage } from '../shared/utils.js';
+import { MESSAGE_TYPES, DEFAULT_SETTINGS, RISK_LEVELS } from '../shared/constants';
+import { createResponse } from '../shared/message-types';
+import { parseEmailBody, extractHeaders, sanitizeForAI, createMimeMessage } from '../shared/utils';
 
 import {
   isAuthenticated,
   getAuthTokenInteractive,
   revokeAuth,
-} from './auth.js';
+} from './auth';
 
-import * as gmailApi from './gmail-api.js';
+import * as gmailApi from './gmail-api';
 
 import {
   summarizeEmail,
@@ -25,9 +25,8 @@ import {
   draftReply,
   translateToGmailQuery,
   chatWithAgent,
-  setApiKey,
   getApiKey,
-} from './ai-provider.js';
+} from './ai-provider';
 
 import {
   queueAction,
@@ -35,13 +34,12 @@ import {
   approveAction,
   rejectAction,
   getActionLog,
-  getSettings,
-  updateSettings,
-} from './action-queue.js';
+} from './action-queue';
+import type { ExtensionResponse, ThreadMessageInput } from '../shared/types';
 
 // ── Install / Update ───────────────────────────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener(async (details) => {
+chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDetails) => {
   console.log(`[MailFlow-agent] Installed — reason: ${details.reason}`);
 
   // Seed default settings on first install
@@ -60,10 +58,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 // ── Side-panel: enable only on mail.google.com tabs ────────────────────────────
 
-chrome.tabs.onUpdated.addListener(async (tabId, _changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId: number, _changeInfo: any, tab: chrome.tabs.Tab) => {
   if (!chrome.sidePanel?.setOptions) return;
 
-  const isGmail = tab.url?.startsWith('https://mail.google.com');
+  const isGmail = tab.url?.startsWith('https://mail.google.com') ?? false;
 
   try {
     await chrome.sidePanel.setOptions({
@@ -77,17 +75,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, _changeInfo, tab) => {
 
 // ── Alarms (placeholder for future scheduled tasks) ────────────────────────────
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
   console.log(`[MailFlow-agent] Alarm fired: ${alarm.name}`);
   // Future: handle scheduled email checks, digest generation, etc.
 });
 
 // ── Central message router ─────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
   handleMessage(message)
     .then(sendResponse)
-    .catch((err) => {
+    .catch((err: any) => {
       console.error(`[MailFlow-agent] Message handler error:`, err);
       sendResponse(createResponse(false, null, err.message));
     });
@@ -96,10 +94,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+interface ResolvedEmailData {
+  body: string;
+  subject: string;
+  from: string;
+  emailId?: string;
+  threadId?: string;
+  payload?: any;
+}
+
 /**
  * Resolve email data from either passed content or by fetching from ID/threadId.
  */
-async function resolveEmailData(data = {}, message = {}) {
+async function resolveEmailData(data: any = {}, message: any = {}): Promise<ResolvedEmailData> {
   // Check if we already have the body/payload, subject, and sender
   const body = data.body || message.body || null;
   const payload = data.payload || message.payload || null;
@@ -119,7 +126,9 @@ async function resolveEmailData(data = {}, message = {}) {
     const thread = await gmailApi.getThread(threadId);
     if (thread?.messages?.length) {
       const latestMsg = thread.messages[thread.messages.length - 1];
-      messageId = latestMsg.id;
+      if (latestMsg) {
+        messageId = latestMsg.id;
+      }
     }
   }
 
@@ -128,8 +137,8 @@ async function resolveEmailData(data = {}, message = {}) {
     const headers = extractHeaders(msg.payload?.headers);
     return {
       body: parseEmailBody(msg.payload),
-      subject: headers.subject || '',
-      from: headers.from || '',
+      subject: headers['subject'] || '',
+      from: headers['from'] || '',
       emailId: messageId,
       threadId: msg.threadId || threadId,
       payload: msg.payload
@@ -143,7 +152,7 @@ async function resolveEmailData(data = {}, message = {}) {
  * Route a message to the appropriate handler.
  * Always returns a createResponse(...) object.
  */
-async function handleMessage(message) {
+async function handleMessage(message: any): Promise<ExtensionResponse> {
   const { type, data = {} } = message;
 
   try {
@@ -151,7 +160,7 @@ async function handleMessage(message) {
       // ── Auth ───────────────────────────────────────────────────────────────
       case MESSAGE_TYPES.AUTH_STATUS: {
         const authenticated = await isAuthenticated();
-        let email = null;
+        let email: string | null = null;
         if (authenticated) {
           try {
             const profile = await gmailApi.getProfile();
@@ -165,7 +174,7 @@ async function handleMessage(message) {
 
       case MESSAGE_TYPES.AUTH_LOGIN: {
         await getAuthTokenInteractive();
-        let email = null;
+        let email: string | null = null;
         try {
           const profile = await gmailApi.getProfile();
           email = profile.emailAddress;
@@ -235,37 +244,39 @@ async function handleMessage(message) {
             const thread = await gmailApi.getThread(context.threadId);
             if (thread?.messages?.length) {
               const latestMsg = thread.messages[thread.messages.length - 1];
-              const headers = extractHeaders(latestMsg.payload?.headers);
-              const from = headers.from || '';
-              const subject = headers.subject || '';
-              const body = parseEmailBody(latestMsg.payload);
-              
-              let priority = 'NORMAL';
-              let category = 'WORK';
-              
-              try {
-                const apiKey = await getApiKey();
-                if (apiKey) {
-                  const classification = await classifyEmail(sanitizeForAI(body), subject, from);
-                  priority = classification.priority || 'NORMAL';
-                  category = classification.category || 'WORK';
+              if (latestMsg) {
+                const headers = extractHeaders(latestMsg.payload?.headers);
+                const from = headers['from'] || '';
+                const subject = headers['subject'] || '';
+                const body = parseEmailBody(latestMsg.payload);
+                
+                let priority = 'NORMAL';
+                let category = 'WORK';
+                
+                try {
+                  const apiKey = await getApiKey();
+                  if (apiKey) {
+                    const classification = await classifyEmail(sanitizeForAI(body), subject, from);
+                    priority = classification.priority || 'NORMAL';
+                    category = classification.category || 'WORK';
+                  }
+                } catch (aiErr) {
+                  console.warn('[MailFlow-agent] Context auto-classification failed:', aiErr);
                 }
-              } catch (aiErr) {
-                console.warn('[MailFlow-agent] Context auto-classification failed:', aiErr);
+                
+                chrome.runtime.sendMessage({
+                  type: MESSAGE_TYPES.EMAIL_CONTEXT_UPDATE,
+                  context: {
+                    threadId: context.threadId,
+                    emailId: latestMsg.id,
+                    subject,
+                    from,
+                    body,
+                    priority,
+                    category
+                  }
+                }).catch(() => {});
               }
-              
-              chrome.runtime.sendMessage({
-                type: MESSAGE_TYPES.EMAIL_CONTEXT_UPDATE,
-                context: {
-                  threadId: context.threadId,
-                  emailId: latestMsg.id,
-                  subject,
-                  from,
-                  body,
-                  priority,
-                  category
-                }
-              }).catch(() => {});
             }
           } catch (err) {
             console.error('[MailFlow-agent] GMAIL_CONTEXT_CHANGE processing failed:', err);
@@ -295,7 +306,7 @@ async function handleMessage(message) {
 
       case MESSAGE_TYPES.SUMMARIZE_THREAD: {
         const messagesList = data.messages ?? message.messages ?? [];
-        const threadMessages = messagesList.map((m) => ({
+        const threadMessages: ThreadMessageInput[] = messagesList.map((m: any) => ({
           from: m.from,
           subject: m.subject,
           body: sanitizeForAI(m.body),
@@ -436,7 +447,7 @@ async function handleMessage(message) {
         console.warn(`[MailFlow-agent] Unknown message type: ${type}`);
         return createResponse(false, null, `Unknown message type: ${type}`);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error(`[MailFlow-agent] Error handling ${type}:`, err);
     return createResponse(false, null, err.message);
   }

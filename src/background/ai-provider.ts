@@ -1,10 +1,11 @@
 /**
- * background/ai-provider.js
+ * background/ai-provider.ts
  * Gemini AI integration for MailFlow-agent.
  * All prompts are wrapped with a safety-first system instruction.
  */
 
-import { GEMINI_API_BASE } from '../shared/constants.js';
+import { GEMINI_API_BASE } from '../shared/constants';
+import type { EmailContext, ConversationTurn } from '../shared/types';
 
 // ── Safety system instruction injected into every AI call ──────────────────────
 const SYSTEM_INSTRUCTION = [
@@ -18,13 +19,13 @@ const SYSTEM_INSTRUCTION = [
 // ── API Key management ─────────────────────────────────────────────────────────
 
 /** Retrieve the Gemini API key from chrome.storage.local. */
-export async function getApiKey() {
-  const { geminiApiKey } = await chrome.storage.local.get('geminiApiKey');
+export async function getApiKey(): Promise<string | null> {
+  const { geminiApiKey } = (await chrome.storage.local.get('geminiApiKey')) as { geminiApiKey?: string };
   return geminiApiKey ?? null;
 }
 
 /** Store the Gemini API key in chrome.storage.local. */
-export async function setApiKey(key) {
+export async function setApiKey(key: string): Promise<void> {
   await chrome.storage.local.set({ geminiApiKey: key });
 }
 
@@ -32,11 +33,11 @@ export async function setApiKey(key) {
 
 /**
  * Call the Gemini 2.0 Flash generateContent endpoint.
- * @param {string} prompt            — user prompt
- * @param {string} systemInstruction — optional override; defaults to SYSTEM_INSTRUCTION
- * @returns {Promise<string>} model text response
+ * @param prompt            — user prompt
+ * @param systemInstruction — optional override; defaults to SYSTEM_INSTRUCTION
+ * @returns model text response
  */
-export async function callGemini(prompt, systemInstruction = SYSTEM_INSTRUCTION) {
+export async function callGemini(prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string> {
   const apiKey = await getApiKey();
   if (!apiKey) {
     throw new Error('Gemini API key not configured. Please set it in the extension settings.');
@@ -60,8 +61,8 @@ export async function callGemini(prompt, systemInstruction = SYSTEM_INSTRUCTION)
     },
   };
 
-  let response;
-  let retries = 3;
+  let response: Response | undefined;
+  const retries = 3;
   let delayMs = 1000;
   for (let i = 0; i < retries; i++) {
     try {
@@ -87,6 +88,10 @@ export async function callGemini(prompt, systemInstruction = SYSTEM_INSTRUCTION)
     }
   }
 
+  if (!response) {
+    throw new Error('Failed to connect to the Gemini API.');
+  }
+
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     const msg = err?.error?.message ?? `Gemini API error: ${response.status}`;
@@ -108,7 +113,7 @@ export async function callGemini(prompt, systemInstruction = SYSTEM_INSTRUCTION)
 /**
  * Generate a concise 2-3 sentence summary of an email.
  */
-export async function summarizeEmail(emailContent, subject, from) {
+export async function summarizeEmail(emailContent: string, subject: string, from: string): Promise<string> {
   const prompt = [
     `Summarize the following email in 2-3 concise sentences.`,
     `From: ${from}`,
@@ -120,11 +125,16 @@ export async function summarizeEmail(emailContent, subject, from) {
   return callGemini(prompt);
 }
 
+export interface ThreadMessageInput {
+  from: string;
+  subject: string;
+  body: string;
+}
+
 /**
  * Summarize an entire email thread.
- * @param {Array<{from:string, subject:string, body:string}>} messages
  */
-export async function summarizeThread(messages) {
+export async function summarizeThread(messages: ThreadMessageInput[]): Promise<string> {
   const formatted = messages
     .map((m, i) => `--- Message ${i + 1} ---\nFrom: ${m.from}\nSubject: ${m.subject}\n\n${m.body}`)
     .join('\n\n');
@@ -141,11 +151,17 @@ export async function summarizeThread(messages) {
   return callGemini(prompt);
 }
 
+export interface ClassificationResult {
+  category: string;
+  priority: string;
+  reason: string;
+}
+
 /**
  * Classify an email into a category and priority level.
  * Returns parsed JSON: { category: string, priority: string, reason: string }
  */
-export async function classifyEmail(emailContent, subject, from) {
+export async function classifyEmail(emailContent: string, subject: string, from: string): Promise<ClassificationResult> {
   const prompt = [
     'Classify the following email. Respond ONLY with valid JSON — no markdown fences, no extra text.',
     '',
@@ -167,7 +183,7 @@ export async function classifyEmail(emailContent, subject, from) {
   try {
     // Strip possible markdown code fences
     const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    return JSON.parse(cleaned);
+    return JSON.parse(cleaned) as ClassificationResult;
   } catch {
     return { category: 'Other', priority: 'Medium', reason: raw };
   }
@@ -176,7 +192,14 @@ export async function classifyEmail(emailContent, subject, from) {
 /**
  * Draft a reply email based on user instruction.
  */
-export async function draftReply(emailContent, subject, from, userInstruction, userName = '', userSignature = '') {
+export async function draftReply(
+  emailContent: string,
+  subject: string,
+  from: string,
+  userInstruction: string,
+  userName: string = '',
+  userSignature: string = ''
+): Promise<string> {
   const prompt = [
     'Draft a reply to the following email based on the user\'s instruction.',
     'Return ONLY the email body text — no subject line, no headers.',
@@ -198,7 +221,7 @@ export async function draftReply(emailContent, subject, from, userInstruction, u
  * Translate a natural-language search query into Gmail search operators.
  * Returns the Gmail query string.
  */
-export async function translateToGmailQuery(naturalLanguage) {
+export async function translateToGmailQuery(naturalLanguage: string): Promise<string> {
   const prompt = [
     'Convert the following natural language email search into a Gmail search query using Gmail search operators.',
     'Respond with ONLY the Gmail search query string — nothing else.',
@@ -218,13 +241,12 @@ export async function translateToGmailQuery(naturalLanguage) {
 /**
  * General-purpose chat with the AI agent.
  * This is the main interaction point — supports email context and conversation history.
- *
- * @param {string} userMessage            — the user's latest message
- * @param {object|null} emailContext       — optional current email context
- * @param {Array<{role:string,text:string}>} conversationHistory — prior turns
- * @returns {Promise<string>}
  */
-export async function chatWithAgent(userMessage, emailContext = null, conversationHistory = []) {
+export async function chatWithAgent(
+  userMessage: string,
+  emailContext: EmailContext | null = null,
+  conversationHistory: ConversationTurn[] = []
+): Promise<string> {
   const contextBlock = emailContext
     ? [
         '\n--- Current Email Context ---',

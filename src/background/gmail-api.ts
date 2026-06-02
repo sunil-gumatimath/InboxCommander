@@ -1,14 +1,15 @@
 /**
- * background/gmail-api.js
+ * background/gmail-api.ts
  * Mock Gmail REST API wrapper for offline testing with local state.
  * Uses chrome.storage.local to persist email modifications, replies, and drafts.
  */
 
-import { base64UrlDecode, base64UrlEncode } from '../shared/utils.js';
+import { base64UrlDecode, base64UrlEncode } from '../shared/utils';
+import type { MockEmail, GmailMessage, GmailThread } from '../shared/types';
 
 // ── Initial Mock Emails ────────────────────────────────────────────────────────
 
-const INITIAL_MOCK_EMAILS = [
+const INITIAL_MOCK_EMAILS: MockEmail[] = [
   {
     id: "msg1",
     threadId: "thread1",
@@ -57,8 +58,8 @@ const INITIAL_MOCK_EMAILS = [
 
 // ── Storage Helpers ────────────────────────────────────────────────────────────
 
-async function getMockDb() {
-  const result = await chrome.storage.local.get('mock_emails');
+async function getMockDb(): Promise<MockEmail[]> {
+  const result = (await chrome.storage.local.get('mock_emails')) as { mock_emails?: MockEmail[] };
   if (!result.mock_emails || result.mock_emails.length === 0) {
     await chrome.storage.local.set({ mock_emails: INITIAL_MOCK_EMAILS });
     return INITIAL_MOCK_EMAILS;
@@ -66,18 +67,18 @@ async function getMockDb() {
   return result.mock_emails;
 }
 
-async function saveMockDb(db) {
+async function saveMockDb(db: MockEmail[]): Promise<void> {
   await chrome.storage.local.set({ mock_emails: db });
 }
 
-async function insertMockEmail(email) {
+async function insertMockEmail(email: MockEmail): Promise<void> {
   const db = await getMockDb();
   db.push(email);
   await saveMockDb(db);
 }
 
 // Helper to format mock email into Gmail API schema structure
-function formatMockMessage(email) {
+function formatMockMessage(email: MockEmail): GmailMessage {
   return {
     id: email.id,
     threadId: email.threadId,
@@ -103,7 +104,7 @@ function formatMockMessage(email) {
 /**
  * List message IDs matching a query, filtered from the mock database.
  */
-export async function listMessages(query = '', maxResults = 20) {
+export async function listMessages(query: string = '', maxResults: number = 20): Promise<{ id: string; threadId: string }[]> {
   const db = await getMockDb();
   let filtered = db.filter(email => !email.labelIds.includes('TRASH'));
 
@@ -114,8 +115,14 @@ export async function listMessages(query = '', maxResults = 20) {
     if (q.includes('is:unread')) {
       filtered = filtered.filter(email => email.labelIds.includes('UNREAD'));
     } else if (q.includes('label:')) {
-      const label = q.split('label:')[1].split(' ')[0].toUpperCase();
-      filtered = filtered.filter(email => email.labelIds.includes(label));
+      const parts = q.split('label:');
+      const secondPart = parts[1];
+      if (secondPart) {
+        const label = secondPart.split(' ')[0]?.toUpperCase();
+        if (label) {
+          filtered = filtered.filter(email => email.labelIds.includes(label));
+        }
+      }
     } else {
       // Basic text search
       filtered = filtered.filter(email =>
@@ -127,7 +134,7 @@ export async function listMessages(query = '', maxResults = 20) {
   }
 
   // Sort by date desc
-  filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return filtered.slice(0, maxResults).map(email => ({
     id: email.id,
@@ -138,7 +145,7 @@ export async function listMessages(query = '', maxResults = 20) {
 /**
  * Fetch a single mock message by ID.
  */
-export async function getMessage(messageId, format = 'full') {
+export async function getMessage(messageId: string, _format: string = 'full'): Promise<GmailMessage> {
   const db = await getMockDb();
   const email = db.find(e => e.id === messageId);
   if (!email) {
@@ -150,12 +157,12 @@ export async function getMessage(messageId, format = 'full') {
 /**
  * Fetch an entire mock thread by ID.
  */
-export async function getThread(threadId, format = 'full') {
+export async function getThread(threadId: string, _format: string = 'full'): Promise<GmailThread> {
   const db = await getMockDb();
   const threadEmails = db.filter(e => e.threadId === threadId);
   
   // Sort thread messages chronologically
-  threadEmails.sort((a, b) => new Date(a.date) - new Date(b.date));
+  threadEmails.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return {
     id: threadId,
@@ -163,24 +170,32 @@ export async function getThread(threadId, format = 'full') {
   };
 }
 
+interface ModifyMessageOptions {
+  addLabelIds?: string[];
+  removeLabelIds?: string[];
+}
+
 /**
  * Modify labels on a message locally.
  */
-export async function modifyMessage(messageId, { addLabelIds = [], removeLabelIds = [] } = {}) {
+export async function modifyMessage(messageId: string, { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {}): Promise<GmailMessage> {
   const db = await getMockDb();
   const index = db.findIndex(email => email.id === messageId);
   if (index !== -1) {
-    let labels = db[index].labelIds || [];
-    // Add new labels
-    for (const l of addLabelIds) {
-      if (!labels.includes(l)) labels.push(l);
+    const record = db[index];
+    if (record) {
+      let labels = record.labelIds || [];
+      // Add new labels
+      for (const l of addLabelIds) {
+        if (!labels.includes(l)) labels.push(l);
+      }
+      // Remove labels
+      labels = labels.filter(l => !removeLabelIds.includes(l));
+      record.labelIds = labels;
+      
+      await saveMockDb(db);
+      return formatMockMessage(record);
     }
-    // Remove labels
-    labels = labels.filter(l => !removeLabelIds.includes(l));
-    db[index].labelIds = labels;
-    
-    await saveMockDb(db);
-    return formatMockMessage(db[index]);
   }
   throw new Error(`Message not found: ${messageId}`);
 }
@@ -188,21 +203,21 @@ export async function modifyMessage(messageId, { addLabelIds = [], removeLabelId
 /**
  * Move a message to Trash in the mock database.
  */
-export async function trashMessage(messageId) {
+export async function trashMessage(messageId: string): Promise<GmailMessage> {
   return modifyMessage(messageId, { addLabelIds: ['TRASH'], removeLabelIds: ['INBOX', 'UNREAD'] });
 }
 
 /**
  * Restore a message from Trash in the mock database.
  */
-export async function untrashMessage(messageId) {
+export async function untrashMessage(messageId: string): Promise<GmailMessage> {
   return modifyMessage(messageId, { addLabelIds: ['INBOX'], removeLabelIds: ['TRASH'] });
 }
 
 /**
  * Mock sending a message (appends the reply to the mock database).
  */
-export async function sendMessage(raw, threadId) {
+export async function sendMessage(raw: string, threadId?: string): Promise<GmailMessage> {
   const mimeText = base64UrlDecode(raw);
   
   // Parse fields from mime content
@@ -211,15 +226,15 @@ export async function sendMessage(raw, threadId) {
   const parts = mimeText.split('\r\n\r\n');
   const bodyText = parts.slice(1).join('\r\n\r\n');
 
-  const newEmail = {
+  const newEmail: MockEmail = {
     id: 'msg-' + Date.now(),
     threadId: threadId || ('thread-' + Date.now()),
     labelIds: ['SENT'],
     snippet: bodyText.slice(0, 100).replace(/\r?\n/g, ' '),
     date: new Date().toISOString(),
     from: 'me <user@example.com>',
-    to: toMatch ? toMatch[1].trim() : 'unknown@example.com',
-    subject: subjectMatch ? subjectMatch[1].trim() : 'Sent Message',
+    to: toMatch ? toMatch[1]?.trim() ?? 'unknown@example.com' : 'unknown@example.com',
+    subject: subjectMatch ? subjectMatch[1]?.trim() ?? 'Sent Message' : 'Sent Message',
     body: bodyText
   };
 
@@ -230,7 +245,7 @@ export async function sendMessage(raw, threadId) {
 /**
  * Mock creating a draft (appends draft to local database).
  */
-export async function createDraft(raw, threadId) {
+export async function createDraft(raw: string, threadId?: string): Promise<{ id: string; message: GmailMessage }> {
   const mimeText = base64UrlDecode(raw);
   
   const toMatch = mimeText.match(/To:\s*([^\r\n]+)/i);
@@ -238,15 +253,15 @@ export async function createDraft(raw, threadId) {
   const parts = mimeText.split('\r\n\r\n');
   const bodyText = parts.slice(1).join('\r\n\r\n');
 
-  const newEmail = {
+  const newEmail: MockEmail = {
     id: 'msg-' + Date.now(),
     threadId: threadId || ('thread-' + Date.now()),
     labelIds: ['DRAFT'],
     snippet: bodyText.slice(0, 100).replace(/\r?\n/g, ' '),
     date: new Date().toISOString(),
     from: 'me <user@example.com>',
-    to: toMatch ? toMatch[1].trim() : '',
-    subject: subjectMatch ? subjectMatch[1].trim() : '',
+    to: toMatch ? toMatch[1]?.trim() ?? '' : '',
+    subject: subjectMatch ? subjectMatch[1]?.trim() ?? '' : '',
     body: bodyText
   };
 
@@ -257,10 +272,16 @@ export async function createDraft(raw, threadId) {
   };
 }
 
+export interface GmailLabel {
+  id: string;
+  name: string;
+  type: string;
+}
+
 /**
  * Return list of available system & user labels.
  */
-export async function listLabels() {
+export async function listLabels(): Promise<GmailLabel[]> {
   return [
     { id: "INBOX", name: "INBOX", type: "system" },
     { id: "UNREAD", name: "UNREAD", type: "system" },
@@ -273,10 +294,17 @@ export async function listLabels() {
   ];
 }
 
+export interface GmailProfile {
+  emailAddress: string;
+  messagesTotal: number;
+  threadsTotal: number;
+  historyId: string;
+}
+
 /**
  * Return mock profile email.
  */
-export async function getProfile() {
+export async function getProfile(): Promise<GmailProfile> {
   return {
     emailAddress: 'mock-user@example.com',
     messagesTotal: 100,
@@ -288,7 +316,7 @@ export async function getProfile() {
 /**
  * Batch modify labels on multiple messages.
  */
-export async function batchModify(ids, { addLabelIds = [], removeLabelIds = [] } = {}) {
+export async function batchModify(ids: string[], { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {}): Promise<null> {
   for (const id of ids) {
     await modifyMessage(id, { addLabelIds, removeLabelIds });
   }
@@ -298,7 +326,7 @@ export async function batchModify(ids, { addLabelIds = [], removeLabelIds = [] }
 /**
  * Search messages.
  */
-export async function searchMessages(query, maxResults = 20) {
+export async function searchMessages(query: string, maxResults: number = 20): Promise<GmailMessage[]> {
   const stubs = await listMessages(query, maxResults);
   const messages = await Promise.all(stubs.map((s) => getMessage(s.id)));
   return messages;
@@ -306,20 +334,20 @@ export async function searchMessages(query, maxResults = 20) {
 
 // ── Convenience Helpers ────────────────────────────────────────────────────────
 
-export const archiveMessage = (messageId) =>
+export const archiveMessage = (messageId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { removeLabelIds: ['INBOX'] });
 
-export const markAsRead = (messageId) =>
+export const markAsRead = (messageId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { removeLabelIds: ['UNREAD'] });
 
-export const markAsUnread = (messageId) =>
+export const markAsUnread = (messageId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { addLabelIds: ['UNREAD'] });
 
-export const labelMessage = (messageId, labelId) =>
+export const labelMessage = (messageId: string, labelId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { addLabelIds: [labelId] });
 
-export const starMessage = (messageId) =>
+export const starMessage = (messageId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { addLabelIds: ['STARRED'] });
 
-export const unstarMessage = (messageId) =>
+export const unstarMessage = (messageId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { removeLabelIds: ['STARRED'] });
