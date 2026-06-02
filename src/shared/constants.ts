@@ -1,5 +1,5 @@
 /**
- * Shared constants for MailFlow-agent extension.
+ * Shared constants for InboxCommander extension.
  * Imported by sidepanel, popup, options, content script, and service worker.
  */
 
@@ -96,8 +96,25 @@ export const ACTION_STATUS = {
   FAILED: 'FAILED',
 };
 
+// ─── Gemini Models ───────────────────────────────────────────────
+// Current models available through the Gemini Developer API
+// (generateContent). `id` is sent to the API; `label` is shown in the UI.
+export const GEMINI_MODELS = [
+  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Preview)' },
+  { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
+  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+  { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite' },
+];
+
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+
 // ─── Default Settings ────────────────────────────────────────────
 export const DEFAULT_SETTINGS = {
+  geminiModel: DEFAULT_GEMINI_MODEL,
   approvalRequired: {
     low: false,
     medium: true,
@@ -112,7 +129,7 @@ export const DEFAULT_SETTINGS = {
 
 // ─── Extension Info ──────────────────────────────────────────────
 export const EXTENSION_INFO = {
-  name: 'MailFlow-agent',
+  name: 'InboxCommander',
   version: '1.0.0',
 };
 

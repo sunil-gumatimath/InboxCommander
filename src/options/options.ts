@@ -3,7 +3,7 @@
  * Settings page logic
  */
 
-import { DEFAULT_SETTINGS, MESSAGE_TYPES } from '../shared/constants';
+import { DEFAULT_SETTINGS, MESSAGE_TYPES, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../shared/constants';
 import type { Settings } from '../shared/types';
 import { applyStoredTheme } from '../shared/utils';
 
@@ -14,6 +14,7 @@ const dom = {
   get toggleApiKeyBtn() { return $('#toggleApiKey') as HTMLButtonElement | null; },
   get testApiBtn() { return $('#testApiBtn') as HTMLButtonElement | null; },
   get testApiStatus() { return $('#apiStatus'); },
+  get geminiModel() { return $('#geminiModel') as HTMLSelectElement | null; },
   
   get approveLow() { return $('#approvalLow') as HTMLInputElement | null; },
   get approveMedium() { return $('#approvalMedium') as HTMLInputElement | null; },
@@ -44,6 +45,7 @@ let currentSettings: Settings = { ...DEFAULT_SETTINGS };
 
 async function initOptions(): Promise<void> {
   await applyStoredTheme();
+  populateModelOptions();
   await loadSettings();
   await checkAuthStatus();
   await loadActionLog();
@@ -55,6 +57,13 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initOptions);
 } else {
   initOptions();
+}
+
+function populateModelOptions(): void {
+  if (!dom.geminiModel) return;
+  dom.geminiModel.innerHTML = GEMINI_MODELS
+    .map((m) => `<option value="${m.id}">${m.label}</option>`)
+    .join('');
 }
 
 async function loadSettings(): Promise<void> {
@@ -71,6 +80,8 @@ async function loadSettings(): Promise<void> {
   if (dom.approveMedium) dom.approveMedium.checked = currentSettings.approvalRequired.medium;
   if (dom.approveHigh) dom.approveHigh.checked = currentSettings.approvalRequired.high;
   
+  if (dom.geminiModel) dom.geminiModel.value = currentSettings.geminiModel || DEFAULT_GEMINI_MODEL;
+
   if (dom.toneSelect) dom.toneSelect.value = currentSettings.writingTone || 'professional';
   if (dom.signatureText) dom.signatureText.value = currentSettings.emailSignature || '';
   if (dom.userName) dom.userName.value = currentSettings.userName || '';
@@ -208,7 +219,7 @@ function setupSidebarNav(): void {
 function setupEventListeners(): void {
   // Input changes
   const inputs = [
-    dom.apiKeyInput, dom.approveLow, dom.approveMedium, dom.approveHigh,
+    dom.apiKeyInput, dom.geminiModel, dom.approveLow, dom.approveMedium, dom.approveHigh,
     dom.toneSelect, dom.signatureText, dom.userName, dom.maxEmails
   ];
   
@@ -262,12 +273,13 @@ function setupEventListeners(): void {
     try {
       // Temporarily set it
       await chrome.storage.local.set({ geminiApiKey: apiKey });
+      const model = dom.geminiModel?.value || DEFAULT_GEMINI_MODEL;
       let res: Response | undefined;
       const retries = 3;
       let delayMs = 1000;
       for (let i = 0; i < retries; i++) {
         try {
-          res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+          res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -281,7 +293,7 @@ function setupEventListeners(): void {
           
           // Retry on transient errors (503 Service Unavailable / 429 Rate Limit)
           if ((res.status === 503 || res.status === 429) && i < retries - 1) {
-            console.warn(`[MailFlow] Gemini API returned ${res.status}. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+            console.warn(`[InboxCommander] Gemini API returned ${res.status}. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
             delayMs *= 2;
             continue;
@@ -289,7 +301,7 @@ function setupEventListeners(): void {
           break;
         } catch (err) {
           if (i === retries - 1) throw err;
-          console.warn(`[MailFlow] Fetch failed. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+          console.warn(`[InboxCommander] Fetch failed. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           delayMs *= 2;
         }
@@ -346,6 +358,7 @@ function setupEventListeners(): void {
     
     const newSettings: Settings = {
       ...currentSettings,
+      geminiModel: dom.geminiModel?.value || DEFAULT_GEMINI_MODEL,
       approvalRequired: {
         low: dom.approveLow?.checked ?? false,
         medium: dom.approveMedium?.checked ?? true,

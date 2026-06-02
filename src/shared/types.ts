@@ -1,4 +1,5 @@
 export interface Settings {
+  geminiModel: string;
   approvalRequired: {
     low: boolean;
     medium: boolean;

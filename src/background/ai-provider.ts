@@ -1,10 +1,10 @@
 /**
  * background/ai-provider.ts
- * Gemini AI integration for MailFlow-agent.
+ * Gemini AI integration for InboxCommander.
  * All prompts are wrapped with a safety-first system instruction.
  */
 
-import { GEMINI_API_BASE } from '../shared/constants';
+import { GEMINI_API_BASE, DEFAULT_GEMINI_MODEL } from '../shared/constants';
 import type { EmailContext, ConversationTurn } from '../shared/types';
 
 // ── Safety system instruction injected into every AI call ──────────────────────
@@ -29,10 +29,18 @@ export async function setApiKey(key: string): Promise<void> {
   await chrome.storage.local.set({ geminiApiKey: key });
 }
 
+/** Retrieve the configured Gemini model id from settings (falls back to default). */
+export async function getModel(): Promise<string> {
+  const { extension_settings } = (await chrome.storage.local.get('extension_settings')) as {
+    extension_settings?: { geminiModel?: string };
+  };
+  return extension_settings?.geminiModel || DEFAULT_GEMINI_MODEL;
+}
+
 // ── Core Gemini call ───────────────────────────────────────────────────────────
 
 /**
- * Call the Gemini 2.0 Flash generateContent endpoint.
+ * Call the configured Gemini model's generateContent endpoint.
  * @param prompt            — user prompt
  * @param systemInstruction — optional override; defaults to SYSTEM_INSTRUCTION
  * @returns model text response
@@ -43,7 +51,8 @@ export async function callGemini(prompt: string, systemInstruction: string = SYS
     throw new Error('Gemini API key not configured. Please set it in the extension settings.');
   }
 
-  const url = `${GEMINI_API_BASE}/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const model = await getModel();
+  const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`;
 
   const body = {
     system_instruction: {
@@ -74,7 +83,7 @@ export async function callGemini(prompt: string, systemInstruction: string = SYS
 
       // Retry on transient errors (503 Service Unavailable / 429 Rate Limit)
       if ((response.status === 503 || response.status === 429) && i < retries - 1) {
-        console.warn(`[MailFlow-agent] Gemini API call returned ${response.status}. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+        console.warn(`[InboxCommander] Gemini API call returned ${response.status}. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
         delayMs *= 2;
         continue;
@@ -82,7 +91,7 @@ export async function callGemini(prompt: string, systemInstruction: string = SYS
       break;
     } catch (err) {
       if (i === retries - 1) throw err;
-      console.warn(`[MailFlow-agent] Gemini API call failed. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+      console.warn(`[InboxCommander] Gemini API call failed. Retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
       delayMs *= 2;
     }
