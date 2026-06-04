@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+  build:
+    name: Build (verify)
+    runs-on: ubuntu-latest
+    # Only run build after typecheck passes.
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        env:
+          # CI build uses a syntactically valid placeholder so the build pipeline
+          # itself can be verified without exposing the real OAuth client ID.
+          # Real releases use the `release` workflow with the real secret.
+          GOOGLE_OAUTH_CLIENT_ID: ci-placeholder.apps.googleusercontent.com
+        run: bun run build

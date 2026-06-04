@@ -4,6 +4,13 @@
   "version": "1.0.0",
   "description": "AI-powered email assistant that can read, summarize, classify, draft, reply, delete, archive, and label emails — InboxCommander",
 
+  "icons": {
+    "16": "assets/icons/icon.svg",
+    "32": "assets/icons/icon.svg",
+    "48": "assets/icons/icon.svg",
+    "128": "assets/icons/icon.svg"
+  },
+
   "permissions": [
     "storage",
     "sidePanel",

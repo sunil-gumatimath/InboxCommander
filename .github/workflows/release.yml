@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0). Leave empty to use the current HEAD tag.'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & package extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+        run: bun run build
+
+      - name: Package extension zip
+        run: |
+          mkdir -p dist-package
+          cp manifest.json service-worker-loader.js dist-package/
+          cp -r assets content options popup sidepanel dist-package/
+          cd dist-package
+          zip -r ../inboxcommander-${{ github.ref_name }}.zip .
+          cd ..
+          ls -la inboxcommander-${{ github.ref_name }}.zip
+
+      - name: Generate store icons (PNG from SVG)
+        # The Chrome Web Store listing requires raster icons (16, 48, 128).
+        # This step converts the source SVG into the required PNG sizes using
+        # rsvg-convert. Safe to skip if the icons are already in place.
+        run: |
+          if command -v rsvg-convert >/dev/null 2>&1; then
+            mkdir -p store-icons
+            rsvg-convert -w 16  -h 16  src/assets/icons/icon.svg -o store-icons/icon-16.png
+            rsvg-convert -w 48  -h 48  src/assets/icons/icon.svg -o store-icons/icon-48.png
+            rsvg-convert -w 128 -h 128 src/assets/icons/icon.svg -o store-icons/icon-128.png
+            ls -la store-icons/
+          else
+            echo "rsvg-convert not installed; skipping PNG generation. Upload the SVG-derived PNGs manually."
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            inboxcommander-${{ github.ref_name }}.zip
+            store-icons/*.png
+          fail_on_unmatched_files: false
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
