@@ -66,34 +66,6 @@ export const RISK_LEVELS = {
   HIGH: 'HIGH',
 };
 
-// ─── Email Priority ──────────────────────────────────────────────
-export const PRIORITIES = {
-  URGENT: 'URGENT',
-  HIGH: 'HIGH',
-  NORMAL: 'NORMAL',
-  LOW: 'LOW',
-};
-
-// ─── Email Categories ────────────────────────────────────────────
-export const CATEGORIES = {
-  WORK: 'WORK',
-  PERSONAL: 'PERSONAL',
-  NEWSLETTER: 'NEWSLETTER',
-  PROMOTION: 'PROMOTION',
-  FINANCE: 'FINANCE',
-  SOCIAL: 'SOCIAL',
-  UPDATES: 'UPDATES',
-};
-
-// ─── Action Statuses ─────────────────────────────────────────────
-export const ACTION_STATUS = {
-  PENDING: 'PENDING',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED',
-};
-
 // ─── Gemini Models ───────────────────────────────────────────────
 // Current models available through the Gemini Developer API
 // (generateContent). `id` is sent to the API; `label` is shown in the UI.
@@ -122,12 +94,6 @@ export const DEFAULT_SETTINGS = {
   userName: '',
   maxEmails: 50,
   theme: 'light',
-};
-
-// ─── Extension Info ──────────────────────────────────────────────
-export const EXTENSION_INFO = {
-  name: 'InboxCommander',
-  version: '1.0.0',
 };
 
 // ─── API Bases ───────────────────────────────────────────────────

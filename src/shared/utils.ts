@@ -87,41 +87,6 @@ export function parseEmailBody(payload: GmailMessagePart | null | undefined): st
 }
 
 /**
- * Format a date string into a human-friendly relative representation.
- */
-export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHr = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHr / 24);
-
-  if (diffSec < 60)  return 'Just now';
-  if (diffMin < 60)  return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
-  if (diffHr < 24)   return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
-  if (diffDay === 1)  return 'Yesterday';
-  if (diffDay < 7)    return `${diffDay} days ago`;
-  if (diffDay < 30)   return `${Math.floor(diffDay / 7)} week${Math.floor(diffDay / 7) === 1 ? '' : 's'} ago`;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  });
-}
-
-/**
- * Truncate a string to `maxLength` characters, appending '…' if truncated.
- */
-export function truncate(text: string, maxLength: number = 100): string {
-  if (!text) return '';
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength).trimEnd() + '…';
-}
-
-/**
  * Extract specific headers from the Gmail headers array.
  * @param headers  — payload.headers from the Gmail API
  * @param names — header names to extract (case-insensitive)
@@ -194,17 +159,6 @@ export function sanitizeForAI(text: string, maxLength: number = 12_000): string 
     cleaned,
     '--- END UNTRUSTED EMAIL CONTENT ---',
   ].join('\n');
-}
-
-/**
- * Standard debounce helper.
- */
-export function debounce<A extends any[], R>(fn: (...args: A) => R, delay: number = 300): (...args: A) => void {
-  let timer: any;
-  return (...args: A) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
 }
 
 interface MimeMessageOptions {

@@ -1,5 +1,4 @@
 import type { ExtensionResponse } from './types';
-export { MESSAGE_TYPES } from './constants';
 
 /**
  * Create a standardised response object returned from the service worker.

@@ -62,13 +62,6 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
     await chrome.sidePanel.setOptions({ enabled: true });
   }
 });
-// ── Alarms (placeholder for future scheduled tasks) ────────────────────────────
-
-chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
-  console.log(`[InboxCommander] Alarm fired: ${alarm.name}`);
-  // Future: handle scheduled email checks, digest generation, etc.
-});
-
 // ── Central message router ─────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {

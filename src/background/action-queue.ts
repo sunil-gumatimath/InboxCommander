@@ -263,7 +263,7 @@ export async function rejectAction(actionId: string): Promise<QueuedAction> {
  * pending list as a side-effect of approval. Direct invocation outside of
  * those flows will execute mutating Gmail API calls immediately.
  */
-export async function executeAction(action: QueuedAction): Promise<QueuedAction> {
+async function executeAction(action: QueuedAction): Promise<QueuedAction> {
   try {
     const result = await executeActionInternal(action);
     const completed: QueuedAction = {

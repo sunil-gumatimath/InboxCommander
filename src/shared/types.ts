@@ -12,18 +12,6 @@ export interface Settings {
   theme: string;
 }
 
-export interface MockEmail {
-  id: string;
-  threadId: string;
-  labelIds: string[];
-  snippet: string;
-  date: string;
-  from: string;
-  to: string;
-  subject: string;
-  body: string;
-}
-
 export interface GmailMessagePart {
   mimeType: string;
   body?: {
@@ -63,13 +51,6 @@ export interface QueuedAction {
   completedAt: number | null;
   result: any;
   error: string | null;
-}
-
-export interface ExtensionMessage {
-  type: string;
-  data?: any;
-  timestamp?: number;
-  [key: string]: any;
 }
 
 export interface ExtensionResponse {

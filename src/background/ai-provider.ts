@@ -24,11 +24,6 @@ export async function getApiKey(): Promise<string | null> {
   return geminiApiKey ?? null;
 }
 
-/** Store the Gemini API key in chrome.storage.local. */
-export async function setApiKey(key: string): Promise<void> {
-  await chrome.storage.local.set({ geminiApiKey: key });
-}
-
 /** Retrieve the configured Gemini model id from settings (falls back to default). */
 export async function getModel(): Promise<string> {
   const { extension_settings } = (await chrome.storage.local.get('extension_settings')) as {
@@ -224,7 +219,7 @@ export async function summarizeUnread(emails: InboxEmailInput[]): Promise<string
   return callGemini(prompt);
 }
 
-export interface ClassificationResult {
+interface ClassificationResult {
   category: string;
   priority: string;
   reason: string;

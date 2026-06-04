@@ -1,5 +1,5 @@
 {
-  "name": "email-agent",
+  "name": "inboxcommander",
   "scripts": {
     "setup": "node -e \"const fs=require('fs');if(!fs.existsSync('.env')){fs.copyFileSync('.env.example','.env');console.log('Created .env from .env.example. Edit it to add your GOOGLE_OAUTH_CLIENT_ID.');}else{console.log('.env already exists.');}\"",
     "dev": "vite",
