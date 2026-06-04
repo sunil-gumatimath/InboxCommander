@@ -59,8 +59,9 @@ function updateAuthUI(authenticated: boolean, email?: string | null): void {
     if (dom.actionsGrid) dom.actionsGrid.hidden = false;
     if (dom.authSection) dom.authSection.hidden = true;
 
-    // Fetch pending approvals for the stat badge
+    // Fetch stats for the stat badges
     fetchPendingApprovalsCount();
+    fetchUnreadCount();
   } else {
     dom.connectionDot?.classList.remove('connected');
     dom.connectionDot?.setAttribute('aria-label', 'Not connected');
@@ -77,6 +78,16 @@ async function fetchPendingApprovalsCount(): Promise<void> {
     const response = await sendToBackground({ type: MESSAGE_TYPES.GET_PENDING_APPROVALS });
     const count = response?.approvals?.length ?? 0;
     if (dom.pendingCount) dom.pendingCount.textContent = String(count);
+  } catch {
+    // Ignore
+  }
+}
+
+async function fetchUnreadCount(): Promise<void> {
+  try {
+    const response = await sendToBackground({ type: MESSAGE_TYPES.GET_UNREAD_COUNT });
+    const count = response?.count ?? 0;
+    if (dom.unreadCount) dom.unreadCount.textContent = String(count);
   } catch {
     // Ignore
   }

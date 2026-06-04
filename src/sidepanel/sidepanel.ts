@@ -347,6 +347,11 @@ function handleContextAction(actionType: string): void {
     return;
   }
 
+  if (actionType === 'LABEL_EMAIL') {
+    handleLabelAction();
+    return;
+  }
+
   const payload = {
     type: (MESSAGE_TYPES as Record<string, string>)[actionType],
     emailId: currentEmailContext.emailId,
@@ -363,6 +368,54 @@ function handleContextAction(actionType: string): void {
       showToast(`${actionType.replace('_', ' ')} initiated`, 'success');
     }
   });
+}
+
+async function handleLabelAction(): Promise<void> {
+  if (!currentEmailContext?.emailId) {
+    showToast('No email selected', 'warning');
+    return;
+  }
+
+  try {
+    const labels = await sendToBackground({ type: MESSAGE_TYPES.GET_LABELS });
+    const labelList = Array.isArray(labels) ? labels : [];
+    const userLabels = labelList.filter((label: any) => label?.id && label?.name && label.type !== 'system');
+    const choices = userLabels.map((label: any) => label.name).join(', ');
+    const requested = window.prompt(
+      choices ? `Apply which label?\n\nAvailable labels: ${choices}` : 'Apply which label ID?',
+      '',
+    );
+    if (requested === null) return;
+
+    const value = requested.trim();
+    if (!value) {
+      showToast('Label is required', 'warning');
+      return;
+    }
+
+    const match = labelList.find((label: any) =>
+      label?.id === value || String(label?.name ?? '').toLowerCase() === value.toLowerCase()
+    );
+    const labelId = match?.id ?? value;
+    const labelName = match?.name ?? value;
+
+    const response = await sendToBackground({
+      type: MESSAGE_TYPES.LABEL_EMAIL,
+      messageId: currentEmailContext.emailId,
+      labelId,
+      reason: `Apply label: ${labelName}`,
+    });
+
+    if (response?.error) {
+      showToast(response.error, 'error');
+    } else {
+      showToast('Label action queued', 'success');
+      fetchPendingApprovals();
+      fetchActionHistory();
+    }
+  } catch {
+    showToast('Failed to load labels', 'error');
+  }
 }
 
 // ─── Pending Approvals ──────────────────────────────────────────
@@ -439,7 +492,11 @@ async function handleApproval(id: string, action: 'approve' | 'reject' | 'edit')
 
   try {
     const response = await sendToBackground({ type, actionId: id });
-    showToast(response?.message ?? `Action ${action}d`, action === 'approve' ? 'success' : 'info');
+    if (response?.error) {
+      showToast(response.error, 'error');
+    } else {
+      showToast(`Action ${action}d`, action === 'approve' ? 'success' : 'info');
+    }
     fetchPendingApprovals();
     fetchActionHistory();
   } catch {

@@ -272,7 +272,6 @@ function setupEventListeners(): void {
     
     try {
       // Temporarily set it
-      await chrome.storage.local.set({ geminiApiKey: apiKey });
       const model = dom.geminiModel?.value || DEFAULT_GEMINI_MODEL;
       let res: Response | undefined;
       const retries = 3;
@@ -312,6 +311,7 @@ function setupEventListeners(): void {
         dom.testApiStatus.className = 'status-text success';
         showToast('API key verified successfully', 'success');
         showSaveBar();
+        await chrome.storage.local.set({ geminiApiKey: apiKey });
       } else {
         let reason = res ? `HTTP ${res.status}` : 'Unknown error';
         if (res) {
@@ -345,7 +345,7 @@ function setupEventListeners(): void {
 
   dom.clearLogBtn?.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear the action log?')) {
-      await chrome.storage.local.set({ actionQueue_log: [] });
+      await sendToBackground({ type: MESSAGE_TYPES.CLEAR_LOG });
       renderActionLog([]);
       showToast('Action log cleared', 'success');
     }
