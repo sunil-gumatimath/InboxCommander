@@ -148,7 +148,7 @@ header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   padding: 7px 16px;
   border: none;
   border-radius: var(--radius-md);
@@ -309,7 +309,10 @@ main {
 }
 
 .chip {
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
   background: var(--bg-glass);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
@@ -318,11 +321,18 @@ main {
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    color var(--duration-fast) ease,
-    border-color var(--duration-fast) ease,
-    background var(--duration-fast) ease;
+  transition: all var(--duration-fast) var(--ease-out);
   white-space: nowrap;
+}
+
+.chip svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast) ease;
+}
+
+.chip:hover svg {
+  opacity: 1;
 }
 
 .chip:hover {
@@ -406,18 +416,97 @@ main {
 .message__content {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 8px 12px;
   min-width: 0;
 }
 
 .message--agent .message__content {
-  border-left: 2px solid var(--accent);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 2px;
 }
 
 .message--user .message__content {
-  background: var(--bg-glass);
-  border-right: 2px solid var(--border-medium);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 2px var(--radius-lg);
+  box-shadow: 0 2px 8px rgba(94, 106, 210, 0.25);
+}
+
+.message--user .message__role {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.message--user .message__text {
+  color: var(--text-on-accent);
+}
+
+.message--user .message__time {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Markdown Elements ─────────────────────────────────────────── */
+.message__text h1, .message__text h2, .message__text h3 {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  color: inherit;
+}
+.message__text h1 { font-size: 1.25rem; }
+.message__text h2 { font-size: 1.1rem; }
+.message__text h3 { font-size: 1.0rem; }
+
+.message__text code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--bg-base);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  border: 1px solid var(--border-subtle);
+}
+.message--user .message__text code {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-on-accent);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.message__text pre {
+  background: #141516;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-medium);
+}
+.message--user .message__text pre {
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.message__text pre code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 0.85em;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: #f7f8f8;
+  border: none;
+  white-space: pre;
+}
+
+.message-list {
+  margin: 6px 0 6px 16px;
+  padding: 0;
+  list-style-type: disc;
+}
+.message-list li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.msg-spacing {
+  height: 8px;
 }
 
 .message__role {

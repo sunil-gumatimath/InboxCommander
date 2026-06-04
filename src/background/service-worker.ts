@@ -268,44 +268,63 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
       // ── Gmail Context Change (from content script) ──────────────────────────
       case 'GMAIL_CONTEXT_CHANGE': {
         const context = data.context ?? message.context;
-        if (context && context.view === 'thread' && context.threadId) {
+        const isValidHexId = (id: string | null | undefined): boolean => {
+          if (!id) return false;
+          return /^[0-9a-fA-F]{15,18}$/.test(id);
+        };
+
+        if (context && context.view === 'thread') {
           try {
-            const thread = await gmailApi.getThread(context.threadId);
-            if (thread?.messages?.length) {
-              const latestMsg = thread.messages[thread.messages.length - 1];
-              if (latestMsg) {
-                const headers = extractHeaders(latestMsg.payload?.headers);
-                const from = headers['from'] || '';
-                const subject = headers['subject'] || '';
-                const body = parseEmailBody(latestMsg.payload);
-                
-                let priority = 'NORMAL';
-                let category = 'WORK';
-                
-                try {
-                  const apiKey = await getApiKey();
-                  if (apiKey) {
-                    const classification = await classifyEmail(sanitizeForAI(body), subject, from);
-                    priority = classification.priority || 'NORMAL';
-                    category = classification.category || 'WORK';
-                  }
-                } catch (aiErr) {
-                  console.warn('[InboxCommander] Context auto-classification failed:', aiErr);
+            let threadId = context.threadId;
+            let emailId = context.emailId;
+            let latestMsg = null;
+
+            if (emailId && isValidHexId(emailId)) {
+              const msg = await gmailApi.getMessage(emailId);
+              threadId = msg.threadId;
+              latestMsg = msg;
+            } else if (threadId && isValidHexId(threadId)) {
+              const thread = await gmailApi.getThread(threadId);
+              if (thread?.messages?.length) {
+                latestMsg = thread.messages[thread.messages.length - 1];
+                if (latestMsg) {
+                  emailId = latestMsg.id;
                 }
-                
-                chrome.runtime.sendMessage({
-                  type: MESSAGE_TYPES.EMAIL_CONTEXT_UPDATE,
-                  context: {
-                    threadId: context.threadId,
-                    emailId: latestMsg.id,
-                    subject,
-                    from,
-                    body,
-                    priority,
-                    category
-                  }
-                }).catch(() => {});
               }
+            }
+
+            if (latestMsg) {
+              const headers = extractHeaders(latestMsg.payload?.headers);
+              const from = headers['from'] || '';
+              const subject = headers['subject'] || '';
+              const body = parseEmailBody(latestMsg.payload);
+              
+              let priority = 'NORMAL';
+              let category = 'WORK';
+              
+              try {
+                const apiKey = await getApiKey();
+                if (apiKey) {
+                  const classification = await classifyEmail(sanitizeForAI(body), subject, from);
+                  priority = classification.priority || 'NORMAL';
+                  category = classification.category || 'WORK';
+                }
+              } catch (aiErr) {
+                console.warn('[InboxCommander] Context auto-classification failed:', aiErr);
+              }
+              
+              chrome.runtime.sendMessage({
+                type: MESSAGE_TYPES.EMAIL_CONTEXT_UPDATE,
+                context: {
+                  threadId,
+                  emailId,
+                  subject,
+                  from,
+                  body,
+                  priority,
+                  category
+                }
+              }).catch(() => {});
             }
           } catch (err) {
             console.error('[InboxCommander] GMAIL_CONTEXT_CHANGE processing failed:', err);
@@ -334,7 +353,23 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
       }
 
       case MESSAGE_TYPES.SUMMARIZE_THREAD: {
-        const messagesList = data.messages ?? message.messages ?? [];
+        let messagesList = data.messages ?? message.messages ?? [];
+        const threadId = data.threadId ?? message.threadId;
+
+        if ((!messagesList || messagesList.length === 0) && threadId) {
+          const thread = await gmailApi.getThread(threadId);
+          if (thread?.messages) {
+            messagesList = thread.messages.map((m: any) => {
+              const headers = extractHeaders(m.payload?.headers);
+              return {
+                from: headers['from'] || '',
+                subject: headers['subject'] || '',
+                body: parseEmailBody(m.payload),
+              };
+            });
+          }
+        }
+
         const threadMessages: ThreadMessageInput[] = messagesList.map((m: any) => ({
           from: m.from,
           subject: m.subject,

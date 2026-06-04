@@ -33,6 +33,9 @@ const dom = {
   get historyList() { return $('#historyList'); },
   get toastContainer() { return $('#toastContainer'); },
   get clearChatBtn() { return $('#clearChatBtn') as HTMLButtonElement | null; },
+  get summarizeInboxChip() { return $('[data-action="SUMMARIZE_INBOX"]') as HTMLButtonElement | null; },
+  get summarizeEmailChip() { return $('#summarizeEmailChip') as HTMLButtonElement | null; },
+  get draftReplyChip() { return $('#draftReplyChip') as HTMLButtonElement | null; },
 };
 
 // ─── State ───────────────────────────────────────────────────────
@@ -65,7 +68,7 @@ async function checkPendingQuickAction(): Promise<void> {
         handleQuickAction(pendingQuickAction);
       }, 500);
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // ─── Auth ────────────────────────────────────────────────────────
@@ -171,13 +174,13 @@ function addMessage(role: string, text: string): void {
   messageEl.innerHTML = `
     <div class="message__avatar">
       ${role === 'user'
-        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
-        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
-      }
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
+    }
     </div>
     <div class="message__content">
       <div class="message__role">${role === 'user' ? 'You' : 'InboxCommander'}</div>
-      <div class="message__text">${escapeHtml(text)}</div>
+      <div class="message__text">${formatMessageText(text)}</div>
       <div class="message__time">${timestamp}</div>
     </div>
   `;
@@ -211,12 +214,36 @@ function showLoadingIndicator(): HTMLElement {
 
 // ─── Quick Actions ───────────────────────────────────────────────
 async function handleQuickAction(actionType: string): Promise<void> {
+  // If user requested SUMMARIZE_INBOX but we have an active open email context,
+  // target that email instead as expected.
+  if (actionType === 'SUMMARIZE_INBOX' && currentEmailContext) {
+    actionType = 'SUMMARIZE_EMAIL';
+  }
+
   const labels: Record<string, string> = {
     SUMMARIZE_INBOX: 'Summarize my inbox',
+    SUMMARIZE_EMAIL: 'Summarize this email',
     PRIORITY_EMAILS: 'Show priority emails',
     UNREAD_EMAILS: 'Show unread emails',
     DRAFT_REPLY: 'Draft a reply',
   };
+
+  // Summarize Email needs the currently open email.
+  if (actionType === 'SUMMARIZE_EMAIL') {
+    if (currentEmailContext) {
+      await runInboxAction(
+        MESSAGE_TYPES.SUMMARIZE_EMAIL,
+        'Summarize this email',
+        {
+          emailId: currentEmailContext.emailId,
+          threadId: currentEmailContext.threadId,
+        }
+      );
+    } else {
+      showToast('Open an email first to summarize it', 'warning');
+    }
+    return;
+  }
 
   // Inbox-wide actions have dedicated background handlers that read the inbox.
   const inboxActions: Record<string, string> = {
@@ -248,8 +275,8 @@ async function handleQuickAction(actionType: string): Promise<void> {
   }
 }
 
-/** Run an inbox-wide quick action against its dedicated background handler. */
-async function runInboxAction(type: string, label: string): Promise<void> {
+/** Run an inbox-wide or context quick action against its dedicated background handler. */
+async function runInboxAction(type: string, label: string, extraPayload: Record<string, any> = {}): Promise<void> {
   if (isWaitingForResponse) return;
 
   addMessage('user', label);
@@ -259,7 +286,7 @@ async function runInboxAction(type: string, label: string): Promise<void> {
   const loadingEl = showLoadingIndicator();
 
   try {
-    const response = await sendToBackground({ type });
+    const response = await sendToBackground({ type, ...extraPayload });
     loadingEl.remove();
     if (response?.error) {
       addMessage('agent', `⚠️ ${response.error}`);
@@ -288,11 +315,16 @@ async function requestCurrentEmailContext(): Promise<void> {
     if (!tab?.id || !tab.url?.includes('mail.google.com')) return;
 
     const ctx = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CURRENT_CONTEXT' });
-    if (ctx?.view === 'thread' && ctx.threadId) {
+    if (ctx?.view === 'thread' && (ctx.threadId || ctx.emailId)) {
       // Triggers EMAIL_CONTEXT_UPDATE broadcast from the service worker.
       await sendToBackground({
         type: 'GMAIL_CONTEXT_CHANGE',
-        context: { view: 'thread', threadId: ctx.threadId, url: ctx.url },
+        context: { 
+          view: 'thread', 
+          threadId: ctx.threadId, 
+          emailId: ctx.emailId, 
+          url: ctx.url 
+        },
       });
     }
   } catch {
@@ -304,6 +336,9 @@ function updateEmailContext(context: EmailContext | null): void {
   if (!context) {
     currentEmailContext = null;
     if (dom.emailContext) dom.emailContext.hidden = true;
+    if (dom.summarizeInboxChip) dom.summarizeInboxChip.style.display = '';
+    if (dom.summarizeEmailChip) dom.summarizeEmailChip.style.display = 'none';
+    if (dom.draftReplyChip) dom.draftReplyChip.style.display = 'none';
     return;
   }
 
@@ -339,6 +374,10 @@ function updateEmailContext(context: EmailContext | null): void {
     dom.ctxCategory.textContent = category;
     (dom.ctxCategory as HTMLElement).dataset.category = category;
   }
+
+  if (dom.summarizeInboxChip) dom.summarizeInboxChip.style.display = 'none';
+  if (dom.summarizeEmailChip) dom.summarizeEmailChip.style.display = '';
+  if (dom.draftReplyChip) dom.draftReplyChip.style.display = '';
 }
 
 function handleContextAction(actionType: string): void {
@@ -352,20 +391,42 @@ function handleContextAction(actionType: string): void {
     return;
   }
 
+  const isTextAction = ['SUMMARIZE_EMAIL', 'DRAFT_REPLY', 'SUMMARIZE_THREAD'].includes(actionType);
+
+  if (isTextAction) {
+    const labels: Record<string, string> = {
+      SUMMARIZE_EMAIL: 'Summarize this email',
+      DRAFT_REPLY: 'Draft a reply',
+      SUMMARIZE_THREAD: 'Summarize this thread',
+    };
+
+    // Redirect through the clean chat flow with loading state and user message
+    runInboxAction(
+      (MESSAGE_TYPES as Record<string, string>)[actionType] || actionType,
+      labels[actionType] ?? actionType,
+      {
+        emailId: currentEmailContext.emailId,
+        threadId: currentEmailContext.threadId,
+      }
+    );
+    return;
+  }
+
+  // Mutating actions go to background and queue
   const payload = {
-    type: (MESSAGE_TYPES as Record<string, string>)[actionType],
+    type: (MESSAGE_TYPES as Record<string, string>)[actionType] || actionType,
     emailId: currentEmailContext.emailId,
     threadId: currentEmailContext.threadId,
   };
 
   sendToBackground(payload).then((response) => {
-    if (response?.reply) {
-      addMessage('agent', response.reply);
-    }
     if (response?.error) {
       showToast(response.error, 'error');
     } else {
       showToast(`${actionType.replace('_', ' ')} initiated`, 'success');
+      // Refresh pending approvals and log history
+      fetchPendingApprovals();
+      fetchActionHistory();
     }
   });
 }
@@ -566,8 +627,8 @@ function renderHistory(history: QueuedAction[]): void {
 // ─── Collapsible Sections ────────────────────────────────────────
 function setupCollapsibleSections(): void {
   document.querySelectorAll('[data-collapse]').forEach((header) => {
-    header.addEventListener('click', () => {
-      const h = header as HTMLElement;
+    const h = header as HTMLElement;
+    const toggle = () => {
       const targetId = h.dataset.collapse;
       if (!targetId) return;
       const body = document.getElementById(targetId);
@@ -575,6 +636,15 @@ function setupCollapsibleSections(): void {
 
       body.classList.toggle('section-body--collapsed');
       h.classList.toggle('collapsed');
+      h.setAttribute('aria-expanded', String(!body.classList.contains('section-body--collapsed')));
+    };
+
+    h.addEventListener('click', toggle);
+    h.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
     });
   });
 }
@@ -595,7 +665,11 @@ function setupEventListeners(): void {
     if (dom.chatMessages) {
       dom.chatMessages.innerHTML = `
         <div class="message message--agent fade-in">
-          <div class="message__avatar">✦</div>
+          <div class="message__avatar" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
           <div class="message__content">
             <div class="message__role">InboxCommander</div>
             <div class="message__text">👋 Hello! I can summarize emails, draft replies, search your inbox, and more. What would you like to do?</div>
@@ -710,13 +784,13 @@ async function loadConversationHistory(): Promise<void> {
         messageEl.innerHTML = `
           <div class="message__avatar">
             ${role === 'user'
-              ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
-              : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
-            }
+            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
+          }
           </div>
           <div class="message__content">
             <div class="message__role">${role === 'user' ? 'You' : 'InboxCommander'}</div>
-            <div class="message__text">${escapeHtml(text)}</div>
+            <div class="message__text">${formatMessageText(text)}</div>
             <div class="message__time">${timestamp}</div>
           </div>
         `;
@@ -757,6 +831,76 @@ function escapeHtml(str: string): string {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function formatMessageText(text: string): string {
+  let escaped = escapeHtml(text);
+
+  // 1. Convert code blocks: ```lang\ncode``` or ```code```
+  escaped = escaped.replace(/```(?:[a-zA-Z0-9+#-]*\n)?([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+  // 2. Convert inline code: `code`
+  escaped = escaped.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  // 3. Convert headers: ### Header
+  escaped = escaped.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+  escaped = escaped.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
+  escaped = escaped.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
+
+  // 4. Convert bold: **bold**
+  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+  // 5. Convert italic: *italic*
+  escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // 6. Convert bullet lists (lines starting with -, *, or • followed by space)
+  const lines = escaped.split('\n');
+  let inList = false;
+  for (let i = 0; i < lines.length; i++) {
+    const lineVal = lines[i];
+    if (lineVal === undefined) continue;
+    const line = lineVal.trim();
+    const match = line.match(/^[-*•]\s+(.+)/);
+    if (match) {
+      let prefix = '';
+      if (!inList) {
+        prefix = '<ul class="message-list">';
+        inList = true;
+      }
+      lines[i] = `${prefix}<li>${match[1]}</li>`;
+    } else {
+      if (inList) {
+        lines[i] = '</ul>' + lineVal;
+        inList = false;
+      }
+    }
+  }
+  if (inList && lines.length > 0) {
+    const lastIdx = lines.length - 1;
+    const lastLine = lines[lastIdx];
+    if (lastLine !== undefined) {
+      lines[lastIdx] = lastLine + '</ul>';
+    }
+  }
+
+  let processed = lines.join('\n');
+
+  // 7. Handle double and single newlines (avoid breaking inside pre/code blocks)
+  const parts = processed.split(/(<\/pre>|<pre>)/g);
+  let inPre = false;
+  for (let i = 0; i < parts.length; i++) {
+    const partVal = parts[i];
+    if (partVal === undefined) continue;
+
+    if (partVal === '<pre>') {
+      inPre = true;
+    } else if (partVal === '</pre>') {
+      inPre = false;
+    } else if (!inPre) {
+      parts[i] = partVal.replace(/\n\n/g, '<div class="msg-spacing"></div>').replace(/\n/g, '<br>');
+    }
+  }
+  return parts.join('');
 }
 
 function formatTime(date: Date): string {

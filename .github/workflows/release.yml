@@ -43,20 +43,13 @@ jobs:
           cd ..
           ls -la inboxcommander-${{ github.ref_name }}.zip
 
-      - name: Generate store icons (PNG from SVG)
-        # The Chrome Web Store listing requires raster icons (16, 48, 128).
-        # This step converts the source SVG into the required PNG sizes using
-        # rsvg-convert. Safe to skip if the icons are already in place.
+      - name: Generate store icons
         run: |
-          if command -v rsvg-convert >/dev/null 2>&1; then
-            mkdir -p store-icons
-            rsvg-convert -w 16  -h 16  src/assets/icons/icon.svg -o store-icons/icon-16.png
-            rsvg-convert -w 48  -h 48  src/assets/icons/icon.svg -o store-icons/icon-48.png
-            rsvg-convert -w 128 -h 128 src/assets/icons/icon.svg -o store-icons/icon-128.png
-            ls -la store-icons/
-          else
-            echo "rsvg-convert not installed; skipping PNG generation. Upload the SVG-derived PNGs manually."
-          fi
+          mkdir -p store-icons
+          cp src/assets/icons/logo.png store-icons/icon-128.png
+          cp src/assets/icons/logo.png store-icons/icon-48.png
+          cp src/assets/icons/logo.png store-icons/icon-16.png
+          ls -la store-icons/
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
