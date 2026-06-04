@@ -145,8 +145,13 @@ export function extractHeaders(
 
 /**
  * Generate a random ID (for action-queue entries, etc.).
+ * Uses crypto.randomUUID() with a fallback for environments where it's not available.
  */
 export function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for older environments
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
@@ -211,23 +216,31 @@ interface MimeMessageOptions {
   threadId?: string;
 }
 
+function sanitizeMimeHeader(value: string, fieldName: string): string {
+  const cleaned = String(value ?? '').replace(/[\r\n]+/g, ' ').trim();
+  if (!cleaned) {
+    throw new Error(`${fieldName} is required`);
+  }
+  return cleaned;
+}
+
 /**
  * Build an RFC 2822 MIME message and return it as a base64url string
  * ready for the Gmail API `messages.send` endpoint.
  */
 export function createMimeMessage({ to, subject, body, inReplyTo, references }: MimeMessageOptions): string {
   const lines = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
+    `To: ${sanitizeMimeHeader(to, 'To')}`,
+    `Subject: ${sanitizeMimeHeader(subject, 'Subject')}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
   ];
 
   if (inReplyTo) {
-    lines.push(`In-Reply-To: ${inReplyTo}`);
+    lines.push(`In-Reply-To: ${sanitizeMimeHeader(inReplyTo, 'In-Reply-To')}`);
   }
   if (references) {
-    lines.push(`References: ${references}`);
+    lines.push(`References: ${sanitizeMimeHeader(references, 'References')}`);
   }
 
   // Blank line separates headers from body

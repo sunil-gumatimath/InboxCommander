@@ -139,6 +139,16 @@ export async function getProfile(): Promise<GmailProfile> {
   return gmailFetch<GmailProfile>('/profile');
 }
 
+/** Get the unread message count in INBOX. */
+export async function getUnreadCount(): Promise<number> {
+  // Use Gmail's search query and read `resultSizeEstimate` — this gives the
+  // total matching count without having to paginate through every message.
+  const data = await gmailFetch<{ resultSizeEstimate?: number; messages?: { id: string }[] }>(
+    `/messages?q=${encodeURIComponent('is:unread in:inbox')}&maxResults=1`,
+  );
+  return data.resultSizeEstimate ?? data.messages?.length ?? 0;
+}
+
 /** Batch-modify labels on multiple messages. */
 export async function batchModify(ids: string[], { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {}): Promise<null> {
   await gmailFetch<void>('/messages/batchModify', jsonInit('POST', { ids, addLabelIds, removeLabelIds }));

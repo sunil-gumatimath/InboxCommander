@@ -40,6 +40,7 @@ import {
   editAction,
   getActionLog,
   getSettings,
+  clearActionLog,
 } from './action-queue';
 import type { ExtensionResponse, ThreadMessageInput } from '../shared/types';
 
@@ -155,6 +156,13 @@ async function fetchInboxForAI(query: string = 'label:INBOX', maxResults: number
   });
 }
 
+async function getConfiguredMaxEmails(fallback: number = 25): Promise<number> {
+  const settings = await getSettings();
+  const maxEmails = Number(settings.maxEmails);
+  if (!Number.isFinite(maxEmails)) return fallback;
+  return Math.min(Math.max(Math.floor(maxEmails), 1), 500);
+}
+
 /**
  * Route a message to the appropriate handler.
  * Always returns a createResponse(...) object.
@@ -226,6 +234,27 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
         const format = data.format ?? message.format;
         const thread = await gmailApi.getThread(threadId, format);
         return createResponse(true, thread);
+      }
+
+      case MESSAGE_TYPES.GET_UNREAD_COUNT: {
+        const count = await gmailApi.getUnreadCount();
+        return createResponse(true, { count });
+      }
+
+      case MESSAGE_TYPES.BATCH_MODIFY: {
+        const ids = data.ids ?? message.ids;
+        const addLabelIds = data.addLabelIds ?? message.addLabelIds ?? [];
+        const removeLabelIds = data.removeLabelIds ?? message.removeLabelIds ?? [];
+        if (!Array.isArray(ids) || ids.length === 0) {
+          throw new Error('At least one message ID is required for batch modify.');
+        }
+        const action = await queueAction({
+          type: 'BATCH_MODIFY',
+          params: { ids, addLabelIds, removeLabelIds },
+          reason: data.reason ?? message.reason ?? `Modify ${ids.length} email${ids.length === 1 ? '' : 's'}`,
+          riskLevel: RISK_LEVELS.HIGH,
+        });
+        return createResponse(true, action);
       }
 
       // ── Search ─────────────────────────────────────────────────────────────
@@ -325,34 +354,39 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
       case MESSAGE_TYPES.DRAFT_REPLY: {
         const resolved = await resolveEmailData(data, message);
         const sanitized = sanitizeForAI(resolved.body ?? '');
+        const settings = await getSettings();
+        const baseInstruction = data.instruction ?? message.instruction ?? 'Draft a reply.';
+        const toneInstruction = settings.writingTone
+          ? `Use a ${settings.writingTone} tone. ${baseInstruction}`
+          : baseInstruction;
         const replyBody = await draftReply(
           sanitized,
           resolved.subject,
           resolved.from,
-          data.instruction ?? message.instruction ?? '',
-          data.userName ?? message.userName ?? '',
-          data.userSignature ?? message.userSignature ?? '',
+          toneInstruction,
+          data.userName ?? message.userName ?? settings.userName ?? '',
+          data.userSignature ?? message.userSignature ?? settings.emailSignature ?? '',
         );
         return createResponse(true, { reply: replyBody, replyBody });
       }
 
       // ── Inbox-wide quick actions ───────────────────────────────────────────
       case MESSAGE_TYPES.SUMMARIZE_INBOX: {
-        const maxResults = data.maxResults ?? message.maxResults ?? 25;
+        const maxResults = data.maxResults ?? message.maxResults ?? await getConfiguredMaxEmails();
         const emails = await fetchInboxForAI('label:INBOX', maxResults);
         const summary = await summarizeInbox(emails);
         return createResponse(true, { reply: summary, summary });
       }
 
       case MESSAGE_TYPES.PRIORITY_EMAILS: {
-        const maxResults = data.maxResults ?? message.maxResults ?? 25;
+        const maxResults = data.maxResults ?? message.maxResults ?? await getConfiguredMaxEmails();
         const emails = await fetchInboxForAI('label:INBOX', maxResults);
         const reply = await findPriorityEmails(emails);
         return createResponse(true, { reply });
       }
 
       case MESSAGE_TYPES.UNREAD_EMAILS: {
-        const maxResults = data.maxResults ?? message.maxResults ?? 25;
+        const maxResults = data.maxResults ?? message.maxResults ?? await getConfiguredMaxEmails();
         const emails = await fetchInboxForAI('is:unread', maxResults);
         const reply = await summarizeUnread(emails);
         return createResponse(true, { reply });
@@ -412,6 +446,12 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
       case MESSAGE_TYPES.LABEL_EMAIL: {
         const messageId = data.messageId ?? message.messageId;
         const labelId = data.labelId ?? message.labelId;
+        if (!messageId) {
+          throw new Error('Message ID is required to apply a label.');
+        }
+        if (!labelId) {
+          throw new Error('Label ID is required to apply a label.');
+        }
         const reason = data.reason ?? message.reason ?? `Apply label: ${labelId}`;
         const action = await queueAction({
           type: 'LABEL_EMAIL',
@@ -479,6 +519,11 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
         const limit = data.limit ?? message.limit;
         const log = await getActionLog(limit);
         return createResponse(true, { history: log });
+      }
+
+      case MESSAGE_TYPES.CLEAR_LOG: {
+        await clearActionLog();
+        return createResponse(true, { cleared: true });
       }
 
       // ── Context broadcasts (handled by the side panel) ─────────────────────

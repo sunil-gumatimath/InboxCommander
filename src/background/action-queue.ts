@@ -95,6 +95,12 @@ async function executeActionInternal(action: QueuedAction): Promise<any> {
     case 'MARK_READ':
       return gmailApi.markAsRead(params.messageId);
 
+    case 'BATCH_MODIFY':
+      return gmailApi.batchModify(params.ids, {
+        addLabelIds: params.addLabelIds,
+        removeLabelIds: params.removeLabelIds,
+      });
+
     case 'CREATE_DRAFT':
       return gmailApi.createDraft(params.raw, params.threadId);
 
@@ -248,7 +254,14 @@ export async function rejectAction(actionId: string): Promise<QueuedAction> {
 }
 
 /**
- * Execute an action, log the outcome, and return the updated action record.
+ * Execute an action against the Gmail API, log the outcome, and return the
+ * updated action record.
+ *
+ * ⚠️  This bypasses the user-approval check. Callers are responsible for
+ * having already verified approval is not required (see `queueAction`'s
+ * `isApprovalRequired` check) OR for having just removed the action from the
+ * pending list as a side-effect of approval. Direct invocation outside of
+ * those flows will execute mutating Gmail API calls immediately.
  */
 export async function executeAction(action: QueuedAction): Promise<QueuedAction> {
   try {

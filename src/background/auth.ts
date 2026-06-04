@@ -78,8 +78,13 @@ export async function revokeAuth(): Promise<void> {
 /**
  * fetch() wrapper that injects the Authorization header and transparently
  * refreshes the token on a 401 response.
+ * Includes exponential backoff retry logic for transient errors (5xx, 429).
  */
-export async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+export async function authenticatedFetch(url: string, options: RequestInit = {}, retryCount: number = 0): Promise<Response> {
+  const maxRetries = 3;
+  const baseDelayMs = 1000;
+  const maxDelayMs = 8000;
+
   let token = await getAuthTokenSilent();
   const buildInit = (t: string): RequestInit => ({
     ...options,
@@ -90,10 +95,22 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
   });
 
   let response = await fetch(url, buildInit(token));
+  
+  // Handle 401 - refresh token and retry once
   if (response.status === 401) {
     await removeAuthToken(token);
     token = await getAuthTokenSilent();
     response = await fetch(url, buildInit(token));
   }
+
+  // Retry on transient errors with exponential backoff
+  const isTransient = response.status === 429 || response.status >= 500;
+  if (isTransient && retryCount < maxRetries) {
+    const delayMs = Math.min(baseDelayMs * Math.pow(2, retryCount), maxDelayMs);
+    console.warn(`[InboxCommander] Authenticated fetch returned ${response.status}. Retrying in ${delayMs}ms... (Attempt ${retryCount + 1}/${maxRetries})`);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    return authenticatedFetch(url, options, retryCount + 1);
+  }
+
   return response;
 }
