@@ -11,13 +11,7 @@
     "128": "assets/icons/logo-128.png"
   },
 
-  "permissions": [
-    "storage",
-    "sidePanel",
-    "tabs",
-    "activeTab",
-    "identity"
-  ],
+  "permissions": ["storage", "sidePanel", "tabs", "activeTab", "identity"],
 
   "host_permissions": [
     "https://mail.google.com/*",

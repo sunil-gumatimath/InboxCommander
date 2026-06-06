@@ -11,8 +11,8 @@ import type { Settings, QueuedAction } from '../shared/types';
 
 // ── Storage keys ───────────────────────────────────────────────────────────────
 const STORAGE_KEYS = {
-  PENDING:  'actionQueue_pending',
-  LOG:      'actionQueue_log',
+  PENDING: 'actionQueue_pending',
+  LOG: 'actionQueue_log',
   SETTINGS: 'extension_settings',
 };
 
@@ -41,16 +41,22 @@ async function isApprovalRequired(riskLevel: string): Promise<boolean> {
   const approval = settings.approvalRequired ?? DEFAULT_SETTINGS.approvalRequired;
 
   switch (riskLevel) {
-    case RISK_LEVELS.LOW:    return approval.low    ?? false;
-    case RISK_LEVELS.MEDIUM: return approval.medium ?? true;
-    case RISK_LEVELS.HIGH:   return approval.high   ?? true;
-    default:                 return true;
+    case RISK_LEVELS.LOW:
+      return approval.low ?? false;
+    case RISK_LEVELS.MEDIUM:
+      return approval.medium ?? true;
+    case RISK_LEVELS.HIGH:
+      return approval.high ?? true;
+    default:
+      return true;
   }
 }
 
 /** Read the pending-actions array from storage. */
 async function readPending(): Promise<QueuedAction[]> {
-  const result = (await chrome.storage.local.get(STORAGE_KEYS.PENDING)) as { [key: string]: QueuedAction[] | undefined };
+  const result = (await chrome.storage.local.get(STORAGE_KEYS.PENDING)) as {
+    [key: string]: QueuedAction[] | undefined;
+  };
   const pending = result[STORAGE_KEYS.PENDING];
   return pending ?? [];
 }
@@ -62,7 +68,9 @@ async function writePending(pending: QueuedAction[]): Promise<void> {
 
 /** Append an entry to the action log. */
 async function appendLog(entry: QueuedAction): Promise<void> {
-  const result = (await chrome.storage.local.get(STORAGE_KEYS.LOG)) as { [key: string]: QueuedAction[] | undefined };
+  const result = (await chrome.storage.local.get(STORAGE_KEYS.LOG)) as {
+    [key: string]: QueuedAction[] | undefined;
+  };
   const log = result[STORAGE_KEYS.LOG];
   const updated = [entry, ...(log ?? [])];
   // Keep the log from growing unbounded — retain last 500 entries
@@ -128,7 +136,12 @@ interface QueueActionOptions {
  * Queue an action. If approval is not required, it executes immediately.
  * @returns the action record
  */
-export async function queueAction({ type, params, reason = '', riskLevel = RISK_LEVELS.HIGH }: QueueActionOptions): Promise<QueuedAction> {
+export async function queueAction({
+  type,
+  params,
+  reason = '',
+  riskLevel = RISK_LEVELS.HIGH,
+}: QueueActionOptions): Promise<QueuedAction> {
   const action: QueuedAction = {
     id: generateId(),
     type,
@@ -198,7 +211,10 @@ interface EditActionOptions {
  * Edit a pending action's reason, params, or risk level. The action stays
  * pending so the user can still approve or reject it afterwards.
  */
-export async function editAction(actionId: string, updates: EditActionOptions = {}): Promise<QueuedAction> {
+export async function editAction(
+  actionId: string,
+  updates: EditActionOptions = {},
+): Promise<QueuedAction> {
   const pending = await readPending();
   const index = pending.findIndex((a) => a.id === actionId);
 
@@ -287,7 +303,9 @@ async function executeAction(action: QueuedAction): Promise<QueuedAction> {
 }
 
 export async function getActionLog(limit: number = 50): Promise<QueuedAction[]> {
-  const result = (await chrome.storage.local.get(STORAGE_KEYS.LOG)) as { [key: string]: QueuedAction[] | undefined };
+  const result = (await chrome.storage.local.get(STORAGE_KEYS.LOG)) as {
+    [key: string]: QueuedAction[] | undefined;
+  };
   const log = result[STORAGE_KEYS.LOG];
   return (log ?? []).slice(0, limit);
 }

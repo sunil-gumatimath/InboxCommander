@@ -6,6 +6,8 @@
 import { DEFAULT_SETTINGS, MESSAGE_TYPES, GEMINI_MODELS, DEFAULT_GEMINI_MODEL } from '../shared/constants';
 import type { Settings } from '../shared/types';
 import { applyStoredTheme } from '../shared/utils';
+import { sendToBackground } from '../shared/messaging';
+import { escapeHtml } from '../shared/escape';
 
 const $ = <T extends Element = HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
 
@@ -327,7 +329,7 @@ function setupEventListeners(): void {
         dom.testApiStatus.textContent = reason;
         dom.testApiStatus.className = 'status-text error';
       }
-    } catch (e) {
+    } catch {
       dom.testApiStatus.textContent = 'Network error';
       dom.testApiStatus.className = 'status-text error';
     } finally {
@@ -418,32 +420,4 @@ function showToast(message: string, type: 'success' | 'error' = 'success'): void
   }, 2800);
 }
 
-function sendToBackground(message: any): Promise<any> {
-  const { type, ...rest } = message;
-  const wrappedMessage = {
-    type,
-    data: rest
-  };
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(wrappedMessage, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else if (response && typeof response === 'object' && 'success' in response) {
-        if (response.success) {
-          resolve(response.data);
-        } else {
-          resolve({ error: response.error || 'Unknown error' });
-        }
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
 
-function escapeHtml(str: string): string {
-  if (typeof str !== 'string') return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}

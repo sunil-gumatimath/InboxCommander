@@ -5,8 +5,8 @@
    ══════════════════════════════════════════════════════════════════ */
 
 :root,
-:root[data-theme="light"],
-[data-theme="light"] {
+:root[data-theme='light'],
+[data-theme='light'] {
   /* ── Backgrounds (Linear Inverse/Light variant) ───────────── */
   --bg-base: #f5f6f6;
   --bg-surface: #ffffff;
@@ -68,34 +68,34 @@
 }
 
 /* ── Dark Theme Overrides (Linear Canonical Dark) ────────────────── */
-:root[data-theme="dark"],
-[data-theme="dark"] {
+:root[data-theme='dark'],
+[data-theme='dark'] {
   /* ── Backgrounds ──────────────────────────────────────────── */
-  --bg-base: #010102;       /* Linear Canvas */
-  --bg-surface: #0f1011;    /* Linear Surface-1 */
-  --bg-elevated: #141516;   /* Linear Surface-2 */
+  --bg-base: #010102; /* Linear Canvas */
+  --bg-surface: #0f1011; /* Linear Surface-1 */
+  --bg-elevated: #141516; /* Linear Surface-2 */
   --bg-glass: rgba(15, 16, 17, 0.85);
   --bg-input: #0f1011;
 
   /* ── Borders ──────────────────────────────────────────────── */
-  --border-subtle: #23252a;  /* Linear Hairline */
-  --border-medium: #34343a;  /* Linear Hairline-strong */
-  --border-accent: #3e3e44;  /* Linear Hairline-tertiary */
+  --border-subtle: #23252a; /* Linear Hairline */
+  --border-medium: #34343a; /* Linear Hairline-strong */
+  --border-accent: #3e3e44; /* Linear Hairline-tertiary */
 
   /* ── Text ─────────────────────────────────────────────────── */
-  --text-primary: #f7f8f8;   /* Linear Ink */
+  --text-primary: #f7f8f8; /* Linear Ink */
   --text-secondary: #d0d6e0; /* Linear Ink Muted */
-  --text-muted: #8a8f98;     /* Linear Ink Subtle */
+  --text-muted: #8a8f98; /* Linear Ink Subtle */
 
   /* ── Accent / Brand ───────────────────────────────────────── */
-  --accent: #5e6ad2;         /* Linear Lavender */
-  --accent-hover: #828fff;   /* Linear Lavender Hover */
-  --accent-active: #5e69d1;  /* Linear Lavender Focus */
+  --accent: #5e6ad2; /* Linear Lavender */
+  --accent-hover: #828fff; /* Linear Lavender Hover */
+  --accent-active: #5e69d1; /* Linear Lavender Focus */
   --accent-soft: rgba(94, 106, 210, 0.15);
   --accent-active-soft: rgba(94, 106, 210, 0.25);
 
   /* ── Semantic ─────────────────────────────────────────────── */
-  --green: #27a644;          /* Success Green */
+  --green: #27a644; /* Success Green */
   --green-bg: rgba(39, 166, 68, 0.1);
   --green-border: rgba(39, 166, 68, 0.3);
 

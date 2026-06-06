@@ -28,7 +28,7 @@ function safeSendMessage(message: any): void {
         // Fail silently when context is invalidated
       });
     }
-  } catch (err) {
+  } catch {
     // Fail silently when context is invalidated
   }
 }
@@ -242,7 +242,7 @@ async function showNotification(text: string, level: string = 'info'): Promise<v
         theme = 'dark';
       }
     }
-  } catch (e) {
+  } catch {
     // Default to light theme on error
   }
 

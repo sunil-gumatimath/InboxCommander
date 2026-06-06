@@ -68,16 +68,24 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 /**
  * List message IDs matching a Gmail search query.
  */
-export async function listMessages(query: string = '', maxResults: number = 20): Promise<{ id: string; threadId: string }[]> {
+export async function listMessages(
+  query: string = '',
+  maxResults: number = 20,
+): Promise<{ id: string; threadId: string }[]> {
   const qs = buildQuery({ q: query, maxResults });
-  const data = await gmailFetch<{ messages?: { id: string; threadId: string }[] }>(`/messages${qs}`);
+  const data = await gmailFetch<{ messages?: { id: string; threadId: string }[] }>(
+    `/messages${qs}`,
+  );
   return data.messages ?? [];
 }
 
 /**
  * Fetch a single message by ID.
  */
-export async function getMessage(messageId: string, format: string = 'full'): Promise<GmailMessage> {
+export async function getMessage(
+  messageId: string,
+  format: string = 'full',
+): Promise<GmailMessage> {
   const qs = buildQuery({ format });
   return gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}${qs}`);
 }
@@ -93,7 +101,10 @@ export async function getThread(threadId: string, format: string = 'full'): Prom
 /**
  * Modify labels on a message.
  */
-export async function modifyMessage(messageId: string, { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {}): Promise<GmailMessage> {
+export async function modifyMessage(
+  messageId: string,
+  { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {},
+): Promise<GmailMessage> {
   return gmailFetch<GmailMessage>(
     `/messages/${encodeURIComponent(messageId)}/modify`,
     jsonInit('POST', { addLabelIds, removeLabelIds }),
@@ -102,12 +113,16 @@ export async function modifyMessage(messageId: string, { addLabelIds = [], remov
 
 /** Move a message to Trash. */
 export async function trashMessage(messageId: string): Promise<GmailMessage> {
-  return gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}/trash`, { method: 'POST' });
+  return gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}/trash`, {
+    method: 'POST',
+  });
 }
 
 /** Restore a message from Trash. */
 export async function untrashMessage(messageId: string): Promise<GmailMessage> {
-  return gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}/untrash`, { method: 'POST' });
+  return gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}/untrash`, {
+    method: 'POST',
+  });
 }
 
 /**
@@ -122,10 +137,16 @@ export async function sendMessage(raw: string, threadId?: string): Promise<Gmail
 /**
  * Create a draft. `raw` must be a base64url-encoded RFC 2822 MIME message.
  */
-export async function createDraft(raw: string, threadId?: string): Promise<{ id: string; message: GmailMessage }> {
+export async function createDraft(
+  raw: string,
+  threadId?: string,
+): Promise<{ id: string; message: GmailMessage }> {
   const message: Record<string, string> = { raw };
   if (threadId) message.threadId = threadId;
-  return gmailFetch<{ id: string; message: GmailMessage }>('/drafts', jsonInit('POST', { message }));
+  return gmailFetch<{ id: string; message: GmailMessage }>(
+    '/drafts',
+    jsonInit('POST', { message }),
+  );
 }
 
 /** List all available labels (system + user). */
@@ -150,13 +171,22 @@ export async function getUnreadCount(): Promise<number> {
 }
 
 /** Batch-modify labels on multiple messages. */
-export async function batchModify(ids: string[], { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {}): Promise<null> {
-  await gmailFetch<void>('/messages/batchModify', jsonInit('POST', { ids, addLabelIds, removeLabelIds }));
+export async function batchModify(
+  ids: string[],
+  { addLabelIds = [], removeLabelIds = [] }: ModifyMessageOptions = {},
+): Promise<null> {
+  await gmailFetch<void>(
+    '/messages/batchModify',
+    jsonInit('POST', { ids, addLabelIds, removeLabelIds }),
+  );
   return null;
 }
 
 /** Search messages and hydrate each result with the full payload. */
-export async function searchMessages(query: string, maxResults: number = 20): Promise<GmailMessage[]> {
+export async function searchMessages(
+  query: string,
+  maxResults: number = 20,
+): Promise<GmailMessage[]> {
   const stubs = await listMessages(query, maxResults);
   return Promise.all(stubs.map((s) => getMessage(s.id)));
 }
@@ -180,4 +210,3 @@ export const starMessage = (messageId: string): Promise<GmailMessage> =>
 
 export const unstarMessage = (messageId: string): Promise<GmailMessage> =>
   modifyMessage(messageId, { removeLabelIds: ['STARRED'] });
-

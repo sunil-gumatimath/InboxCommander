@@ -6,10 +6,12 @@
 import { MESSAGE_TYPES } from '../shared/constants';
 import type { ConversationTurn, EmailContext, QueuedAction } from '../shared/types';
 import { applyStoredTheme } from '../shared/utils';
+import { sendToBackground } from '../shared/messaging';
+import { escapeHtml } from '../shared/escape';
+import { formatMessageText } from '../shared/markdown';
 
 // ─── DOM References ──────────────────────────────────────────────
 const $ = <T extends Element = HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
-const $$ = <T extends Element = HTMLElement>(sel: string): NodeListOf<T> => document.querySelectorAll<T>(sel);
 
 const dom = {
   get connectionDot() { return $('#connectionDot'); },
@@ -68,7 +70,9 @@ async function checkPendingQuickAction(): Promise<void> {
         handleQuickAction(pendingQuickAction);
       }, 500);
     }
-  } catch (e) { }
+  } catch {
+    // Best-effort: the side panel may not be available in every Chrome version
+  }
 }
 
 // ─── Auth ────────────────────────────────────────────────────────
@@ -114,7 +118,7 @@ async function handleLogin(): Promise<void> {
     } else {
       showToast(response?.error ?? 'Authentication failed', 'error');
     }
-  } catch (err) {
+  } catch {
     showToast('Connection failed. Please try again.', 'error');
   } finally {
     dom.authBtn.disabled = false;
@@ -156,7 +160,7 @@ async function handleSendMessage(): Promise<void> {
     } else {
       addMessage('agent', response?.reply ?? 'I couldn\'t process that request. Please try again.');
     }
-  } catch (err) {
+  } catch {
     loadingEl.remove();
     addMessage('agent', '😔 Something went wrong. Please try again.');
   } finally {
@@ -804,104 +808,6 @@ async function loadConversationHistory(): Promise<void> {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
-function sendToBackground(message: any): Promise<any> {
-  const { type, ...rest } = message;
-  const wrappedMessage = {
-    type,
-    data: rest
-  };
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(wrappedMessage, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else if (response && typeof response === 'object' && 'success' in response) {
-        if (response.success) {
-          resolve(response.data);
-        } else {
-          resolve({ error: response.error || 'Unknown error' });
-        }
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function formatMessageText(text: string): string {
-  let escaped = escapeHtml(text);
-
-  // 1. Convert code blocks: ```lang\ncode``` or ```code```
-  escaped = escaped.replace(/```(?:[a-zA-Z0-9+#-]*\n)?([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-
-  // 2. Convert inline code: `code`
-  escaped = escaped.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-
-  // 3. Convert headers: ### Header
-  escaped = escaped.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
-  escaped = escaped.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
-  escaped = escaped.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-
-  // 4. Convert bold: **bold**
-  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-  // 5. Convert italic: *italic*
-  escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-  // 6. Convert bullet lists (lines starting with -, *, or • followed by space)
-  const lines = escaped.split('\n');
-  let inList = false;
-  for (let i = 0; i < lines.length; i++) {
-    const lineVal = lines[i];
-    if (lineVal === undefined) continue;
-    const line = lineVal.trim();
-    const match = line.match(/^[-*•]\s+(.+)/);
-    if (match) {
-      let prefix = '';
-      if (!inList) {
-        prefix = '<ul class="message-list">';
-        inList = true;
-      }
-      lines[i] = `${prefix}<li>${match[1]}</li>`;
-    } else {
-      if (inList) {
-        lines[i] = '</ul>' + lineVal;
-        inList = false;
-      }
-    }
-  }
-  if (inList && lines.length > 0) {
-    const lastIdx = lines.length - 1;
-    const lastLine = lines[lastIdx];
-    if (lastLine !== undefined) {
-      lines[lastIdx] = lastLine + '</ul>';
-    }
-  }
-
-  let processed = lines.join('\n');
-
-  // 7. Handle double and single newlines (avoid breaking inside pre/code blocks)
-  const parts = processed.split(/(<\/pre>|<pre>)/g);
-  let inPre = false;
-  for (let i = 0; i < parts.length; i++) {
-    const partVal = parts[i];
-    if (partVal === undefined) continue;
-
-    if (partVal === '<pre>') {
-      inPre = true;
-    } else if (partVal === '</pre>') {
-      inPre = false;
-    } else if (!inPre) {
-      parts[i] = partVal.replace(/\n\n/g, '<div class="msg-spacing"></div>').replace(/\n/g, '<br>');
-    }
-  }
-  return parts.join('');
-}
 
 function formatTime(date: Date): string {
   if (!(date instanceof Date) || isNaN(date.getTime())) return 'Just now';

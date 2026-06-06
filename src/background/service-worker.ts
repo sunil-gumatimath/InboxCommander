@@ -10,11 +10,7 @@ import { MESSAGE_TYPES, DEFAULT_SETTINGS, RISK_LEVELS } from '../shared/constant
 import { createResponse } from '../shared/message-types';
 import { parseEmailBody, extractHeaders, sanitizeForAI, createMimeMessage } from '../shared/utils';
 
-import {
-  isAuthenticated,
-  getAuthTokenInteractive,
-  revokeAuth,
-} from './auth';
+import { isAuthenticated, getAuthTokenInteractive, revokeAuth } from './auth';
 
 import * as gmailApi from './gmail-api';
 
@@ -64,18 +60,20 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
 });
 // ── Central message router ─────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((message: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
-  handleMessage(message)
-    .then(sendResponse)
-    .catch((err: any) => {
-      console.error(`[InboxCommander] Message handler error:`, err);
-      sendResponse(createResponse(false, null, err.message));
-    });
+chrome.runtime.onMessage.addListener(
+  (message: any, _sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
+    handleMessage(message)
+      .then(sendResponse)
+      .catch((err: any) => {
+        console.error(`[InboxCommander] Message handler error:`, err);
+        sendResponse(createResponse(false, null, err.message));
+      });
 
-  // Return true — we WILL call sendResponse asynchronously
+    // Return true — we WILL call sendResponse asynchronously
 
-  return true;
-});
+    return true;
+  },
+);
 
 interface ResolvedEmailData {
   body: string;
@@ -124,7 +122,7 @@ async function resolveEmailData(data: any = {}, message: any = {}): Promise<Reso
       from: headers['from'] || '',
       emailId: messageId,
       threadId: msg.threadId || threadId,
-      payload: msg.payload
+      payload: msg.payload,
     };
   }
 
@@ -134,7 +132,10 @@ async function resolveEmailData(data: any = {}, message: any = {}): Promise<Reso
 /**
  * Fetch a set of inbox emails and shape them for the AI provider.
  */
-async function fetchInboxForAI(query: string = 'label:INBOX', maxResults: number = 25): Promise<InboxEmailInput[]> {
+async function fetchInboxForAI(
+  query: string = 'label:INBOX',
+  maxResults: number = 25,
+): Promise<InboxEmailInput[]> {
   const stubs = await gmailApi.listMessages(query, maxResults);
   const messages = await Promise.all(stubs.map((s) => gmailApi.getMessage(s.id)));
   return messages.map((msg) => {
@@ -173,7 +174,7 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
           try {
             const profile = await gmailApi.getProfile();
             email = profile.emailAddress;
-          } catch (e) {
+          } catch {
             // Ignore profile fetch failure
           }
         }
@@ -186,7 +187,7 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
         try {
           const profile = await gmailApi.getProfile();
           email = profile.emailAddress;
-        } catch (e) {
+        } catch {
           // Ignore
         }
         return createResponse(true, { authenticated: true, email });
@@ -209,9 +210,7 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
         const maxResults = data.maxResults ?? message.maxResults;
         const stubs = await gmailApi.listMessages(query, maxResults);
         // Hydrate each stub with full message data
-        const messages = await Promise.all(
-          stubs.map((s) => gmailApi.getMessage(s.id)),
-        );
+        const messages = await Promise.all(stubs.map((s) => gmailApi.getMessage(s.id)));
         return createResponse(true, messages);
       }
 
@@ -244,7 +243,10 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
         const action = await queueAction({
           type: 'BATCH_MODIFY',
           params: { ids, addLabelIds, removeLabelIds },
-          reason: data.reason ?? message.reason ?? `Modify ${ids.length} email${ids.length === 1 ? '' : 's'}`,
+          reason:
+            data.reason ??
+            message.reason ??
+            `Modify ${ids.length} email${ids.length === 1 ? '' : 's'}`,
           riskLevel: RISK_LEVELS.HIGH,
         });
         return createResponse(true, action);
@@ -298,10 +300,10 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
               const from = headers['from'] || '';
               const subject = headers['subject'] || '';
               const body = parseEmailBody(latestMsg.payload);
-              
+
               let priority = 'NORMAL';
               let category = 'WORK';
-              
+
               try {
                 const apiKey = await getApiKey();
                 if (apiKey) {
@@ -312,27 +314,31 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
               } catch (aiErr) {
                 console.warn('[InboxCommander] Context auto-classification failed:', aiErr);
               }
-              
-              chrome.runtime.sendMessage({
-                type: MESSAGE_TYPES.EMAIL_CONTEXT_UPDATE,
-                context: {
-                  threadId,
-                  emailId,
-                  subject,
-                  from,
-                  body,
-                  priority,
-                  category
-                }
-              }).catch(() => {});
+
+              chrome.runtime
+                .sendMessage({
+                  type: MESSAGE_TYPES.EMAIL_CONTEXT_UPDATE,
+                  context: {
+                    threadId,
+                    emailId,
+                    subject,
+                    from,
+                    body,
+                    priority,
+                    category,
+                  },
+                })
+                .catch(() => {});
             }
           } catch (err) {
             console.error('[InboxCommander] GMAIL_CONTEXT_CHANGE processing failed:', err);
           }
         } else {
-          chrome.runtime.sendMessage({
-            type: MESSAGE_TYPES.EMAIL_CONTEXT_CLEAR
-          }).catch(() => {});
+          chrome.runtime
+            .sendMessage({
+              type: MESSAGE_TYPES.EMAIL_CONTEXT_CLEAR,
+            })
+            .catch(() => {});
         }
         return createResponse(true);
       }
@@ -400,21 +406,24 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
 
       // ── Inbox-wide quick actions ───────────────────────────────────────────
       case MESSAGE_TYPES.SUMMARIZE_INBOX: {
-        const maxResults = data.maxResults ?? message.maxResults ?? await getConfiguredMaxEmails();
+        const maxResults =
+          data.maxResults ?? message.maxResults ?? (await getConfiguredMaxEmails());
         const emails = await fetchInboxForAI('label:INBOX', maxResults);
         const summary = await summarizeInbox(emails);
         return createResponse(true, { reply: summary, summary });
       }
 
       case MESSAGE_TYPES.PRIORITY_EMAILS: {
-        const maxResults = data.maxResults ?? message.maxResults ?? await getConfiguredMaxEmails();
+        const maxResults =
+          data.maxResults ?? message.maxResults ?? (await getConfiguredMaxEmails());
         const emails = await fetchInboxForAI('label:INBOX', maxResults);
         const reply = await findPriorityEmails(emails);
         return createResponse(true, { reply });
       }
 
       case MESSAGE_TYPES.UNREAD_EMAILS: {
-        const maxResults = data.maxResults ?? message.maxResults ?? await getConfiguredMaxEmails();
+        const maxResults =
+          data.maxResults ?? message.maxResults ?? (await getConfiguredMaxEmails());
         const emails = await fetchInboxForAI('is:unread', maxResults);
         const reply = await summarizeUnread(emails);
         return createResponse(true, { reply });
@@ -422,14 +431,16 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
 
       case MESSAGE_TYPES.CHAT: {
         const resolvedMessage = data.message ?? message.message;
-        const resolvedContext = data.emailContext ?? message.emailContext ?? data.context ?? message.context ?? null;
-        const resolvedHistory = data.conversationHistory ?? message.conversationHistory ?? data.history ?? message.history ?? [];
+        const resolvedContext =
+          data.emailContext ?? message.emailContext ?? data.context ?? message.context ?? null;
+        const resolvedHistory =
+          data.conversationHistory ??
+          message.conversationHistory ??
+          data.history ??
+          message.history ??
+          [];
 
-        const response = await chatWithAgent(
-          resolvedMessage,
-          resolvedContext,
-          resolvedHistory,
-        );
+        const response = await chatWithAgent(resolvedMessage, resolvedContext, resolvedHistory);
         return createResponse(true, { reply: response, response });
       }
 

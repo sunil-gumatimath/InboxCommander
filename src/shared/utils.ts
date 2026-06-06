@@ -27,7 +27,7 @@ export function base64UrlDecode(str: string): string {
   // Replace base64url chars with standard base64
   const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
   // Pad to a multiple of 4
-  const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
   const binary = atob(padded);
   // Decode UTF-8
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
@@ -44,10 +44,7 @@ export function base64UrlEncode(str: string): string {
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**
@@ -94,7 +91,7 @@ export function parseEmailBody(payload: GmailMessagePart | null | undefined): st
  */
 export function extractHeaders(
   headers: { name: string; value: string }[] | undefined,
-  names: string[] = ['From', 'To', 'Subject', 'Date']
+  names: string[] = ['From', 'To', 'Subject', 'Date'],
 ): Record<string, string> {
   if (!headers?.length) return {};
   const wanted = new Set(names.map((n) => n.toLowerCase()));
@@ -171,7 +168,9 @@ interface MimeMessageOptions {
 }
 
 function sanitizeMimeHeader(value: string, fieldName: string): string {
-  const cleaned = String(value ?? '').replace(/[\r\n]+/g, ' ').trim();
+  const cleaned = String(value ?? '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
   if (!cleaned) {
     throw new Error(`${fieldName} is required`);
   }
@@ -182,7 +181,13 @@ function sanitizeMimeHeader(value: string, fieldName: string): string {
  * Build an RFC 2822 MIME message and return it as a base64url string
  * ready for the Gmail API `messages.send` endpoint.
  */
-export function createMimeMessage({ to, subject, body, inReplyTo, references }: MimeMessageOptions): string {
+export function createMimeMessage({
+  to,
+  subject,
+  body,
+  inReplyTo,
+  references,
+}: MimeMessageOptions): string {
   const lines = [
     `To: ${sanitizeMimeHeader(to, 'To')}`,
     `Subject: ${sanitizeMimeHeader(subject, 'Subject')}`,
