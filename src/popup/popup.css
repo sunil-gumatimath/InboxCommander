@@ -288,6 +288,25 @@ header {
   color: var(--accent);
 }
 
+.action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+}
+
+.action-btn:disabled:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+  background: var(--bg-surface);
+}
+
+.action-btn:disabled:hover .action-arrow {
+  transform: none;
+  color: var(--text-muted);
+}
+
 .action-btn.accent {
   color: var(--accent);
   background: var(--accent-soft);

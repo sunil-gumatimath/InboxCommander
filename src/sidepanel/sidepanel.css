@@ -636,6 +636,48 @@ main {
   gap: 5px;
 }
 
+/* Primary action — Summarize This Email — the headline button in the
+   email context banner. Full-width, accent-styled, with a small icon. */
+.ctx-primary-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  margin: 0 0 8px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all var(--duration-base) var(--ease-out);
+  box-shadow: var(--shadow-accent, var(--shadow-sm));
+}
+
+.ctx-primary-action:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.ctx-primary-action:active {
+  background: var(--accent-active);
+  transform: translateY(0);
+}
+
+.ctx-primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ── Badges ───────────────────────────────────────────────────── */
 .badge {
   font-size: 11px;

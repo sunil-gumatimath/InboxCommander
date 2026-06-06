@@ -63,16 +63,29 @@ if (document.readyState === 'loading') {
 
 async function checkPendingQuickAction(): Promise<void> {
   try {
-    const { pendingQuickAction } = (await chrome.storage.session.get('pendingQuickAction')) as { pendingQuickAction?: string };
+    const { pendingQuickAction, pendingEmailContext } = (await chrome.storage.session.get([
+      'pendingQuickAction',
+      'pendingEmailContext',
+    ])) as {
+      pendingQuickAction?: string;
+      pendingEmailContext?: GmailContextSnapshot;
+    };
     if (pendingQuickAction) {
-      await chrome.storage.session.remove('pendingQuickAction');
+      await chrome.storage.session.remove(['pendingQuickAction', 'pendingEmailContext']);
       setTimeout(() => {
-        handleQuickAction(pendingQuickAction);
+        handleQuickAction(pendingQuickAction, pendingEmailContext ?? null);
       }, 500);
     }
   } catch {
     // Best-effort: the side panel may not be available in every Chrome version
   }
+}
+
+interface GmailContextSnapshot {
+  view: 'inbox' | 'thread' | 'compose' | null;
+  threadId: string | null;
+  emailId: string | null;
+  url?: string;
 }
 
 // ─── Auth ────────────────────────────────────────────────────────
@@ -217,12 +230,22 @@ function showLoadingIndicator(): HTMLElement {
 }
 
 // ─── Quick Actions ───────────────────────────────────────────────
-async function handleQuickAction(actionType: string): Promise<void> {
+async function handleQuickAction(
+  actionType: string,
+  pendingContext: GmailContextSnapshot | null = null,
+): Promise<void> {
   // If user requested SUMMARIZE_INBOX but we have an active open email context,
   // target that email instead as expected.
   if (actionType === 'SUMMARIZE_INBOX' && currentEmailContext) {
     actionType = 'SUMMARIZE_EMAIL';
   }
+
+  // Map the popup-passed context (if any) to the format expected by the
+  // service worker for SUMMARIZE_EMAIL.
+  const pendingContextPayload =
+    pendingContext && pendingContext.view === 'thread' && (pendingContext.emailId || pendingContext.threadId)
+      ? { emailId: pendingContext.emailId ?? null, threadId: pendingContext.threadId ?? null }
+      : null;
 
   const labels: Record<string, string> = {
     SUMMARIZE_INBOX: 'Summarize my inbox',
@@ -234,7 +257,13 @@ async function handleQuickAction(actionType: string): Promise<void> {
 
   // Summarize Email needs the currently open email.
   if (actionType === 'SUMMARIZE_EMAIL') {
-    if (currentEmailContext) {
+    if (pendingContextPayload) {
+      await runInboxAction(
+        MESSAGE_TYPES.SUMMARIZE_EMAIL,
+        'Summarize this email',
+        pendingContextPayload,
+      );
+    } else if (currentEmailContext) {
       await runInboxAction(
         MESSAGE_TYPES.SUMMARIZE_EMAIL,
         'Summarize this email',
@@ -318,21 +347,26 @@ async function requestCurrentEmailContext(): Promise<void> {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !tab.url?.includes('mail.google.com')) return;
 
-    const ctx = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CURRENT_CONTEXT' });
-    if (ctx?.view === 'thread' && (ctx.threadId || ctx.emailId)) {
-      // Triggers EMAIL_CONTEXT_UPDATE broadcast from the service worker.
-      await sendToBackground({
-        type: 'GMAIL_CONTEXT_CHANGE',
-        context: { 
-          view: 'thread', 
-          threadId: ctx.threadId, 
-          emailId: ctx.emailId, 
-          url: ctx.url 
-        },
-      });
+    try {
+      const ctx = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CURRENT_CONTEXT' });
+      if (ctx?.view === 'thread' && (ctx.threadId || ctx.emailId)) {
+        // Triggers EMAIL_CONTEXT_UPDATE broadcast from the service worker.
+        await sendToBackground({
+          type: 'GMAIL_CONTEXT_CHANGE',
+          context: { 
+            view: 'thread', 
+            threadId: ctx.threadId, 
+            emailId: ctx.emailId, 
+            url: ctx.url 
+          },
+        });
+      }
+    } catch (msgErr) {
+      console.warn('[InboxCommander] Failed to communicate with content script:', msgErr);
+      showToast('Please refresh Gmail to enable email-specific features', 'warning');
     }
-  } catch {
-    // Content script may not be injected, or the tab isn't Gmail.
+  } catch (err) {
+    console.error('[InboxCommander] Error querying active tab:', err);
   }
 }
 

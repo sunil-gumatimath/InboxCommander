@@ -267,31 +267,39 @@ async function handleMessage(message: any): Promise<ExtensionResponse> {
         return createResponse(true, { query, results });
       }
 
-      // ── Gmail Context Change (from content script) ──────────────────────────
+      // ── Gmail Context Change (from content script) ─────────────────────────
       case 'GMAIL_CONTEXT_CHANGE': {
         const context = data.context ?? message.context;
-        const isValidHexId = (id: string | null | undefined): boolean => {
-          if (!id) return false;
-          return /^[0-9a-fA-F]{15,18}$/.test(id);
-        };
+        // We accept both hex (legacy) and base64url (current) Gmail IDs. The
+        // Gmail API resolves either format, so we no longer gate on isValidHexId.
+        const hasUsableId = (id: string | null | undefined): boolean =>
+          typeof id === 'string' && id.length >= 8;
 
         if (context && context.view === 'thread') {
           try {
-            let threadId = context.threadId;
-            let emailId = context.emailId;
-            let latestMsg = null;
+            let threadId: string | null = context.threadId ?? null;
+            let emailId: string | null = context.emailId ?? null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let latestMsg: any = null;
 
-            if (emailId && isValidHexId(emailId)) {
-              const msg = await gmailApi.getMessage(emailId);
-              threadId = msg.threadId;
-              latestMsg = msg;
-            } else if (threadId && isValidHexId(threadId)) {
+            // Prefer the emailId (most specific). If we don't have one yet
+            // (the content script only resolves it from the DOM), fall back
+            // to the threadId and pick the latest message in the thread.
+            if (emailId && hasUsableId(emailId)) {
+              try {
+                const msg = await gmailApi.getMessage(emailId);
+                latestMsg = msg;
+                if (msg.threadId) threadId = msg.threadId;
+              } catch {
+                // Email may have been deleted or moved; fall through to thread.
+                emailId = null;
+              }
+            }
+            if (!latestMsg && threadId && hasUsableId(threadId)) {
               const thread = await gmailApi.getThread(threadId);
               if (thread?.messages?.length) {
                 latestMsg = thread.messages[thread.messages.length - 1];
-                if (latestMsg) {
-                  emailId = latestMsg.id;
-                }
+                if (latestMsg) emailId = latestMsg.id ?? emailId;
               }
             }
 

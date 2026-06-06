@@ -51,17 +51,23 @@
     </div>
 
     <div class="actions">
-      <button class="action-btn" id="btnSummarize" style="--i: 0">
-        <span class="action-icon" aria-hidden="true">📝</span>
-        <span class="action-label">Summarize</span>
+      <button class="action-btn" id="btnSummarizeCurrent" style="--i: 0" disabled
+        title="Open an email in Gmail to enable">
+        <span class="action-icon" aria-hidden="true">📧</span>
+        <span class="action-label">Summarize This Email</span>
         <span class="action-arrow" aria-hidden="true">›</span>
       </button>
-      <button class="action-btn" id="btnPriority" style="--i: 1">
+      <button class="action-btn" id="btnSummarize" style="--i: 1">
+        <span class="action-icon" aria-hidden="true">📝</span>
+        <span class="action-label">Summarize Inbox</span>
+        <span class="action-arrow" aria-hidden="true">›</span>
+      </button>
+      <button class="action-btn" id="btnPriority" style="--i: 2">
         <span class="action-icon" aria-hidden="true">⚡</span>
         <span class="action-label">Priority Emails</span>
         <span class="action-arrow" aria-hidden="true">›</span>
       </button>
-      <button class="action-btn accent" id="btnOpenPanel" style="--i: 2">
+      <button class="action-btn accent" id="btnOpenPanel" style="--i: 3">
         <span class="action-icon" aria-hidden="true">◫</span>
         <span class="action-label">Open Side Panel</span>
         <span class="action-arrow" aria-hidden="true">›</span>

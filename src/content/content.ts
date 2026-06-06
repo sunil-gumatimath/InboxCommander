@@ -4,7 +4,7 @@
  * Detects Gmail navigation context and bridges DOM info to the service worker.
  */
 
-const GMAIL_THREAD_REGEX = /\/([A-Za-z0-9]{15,})$/;
+const GMAIL_THREAD_REGEX = /\/([A-Za-z0-9_-]{15,})(?:\?.*)?$/;
 
 let currentView: 'inbox' | 'thread' | 'compose' | null = null;
 let currentUrlThreadId: string | null = null;
@@ -40,6 +40,13 @@ function parseGmailContext(): GmailContext {
 
   if (threadMatch && threadMatch[1]) {
     return { view: 'thread', threadId: threadMatch[1] };
+  }
+
+  // Fallback: Check if a thread is currently open in the DOM (e.g. Split Pane mode or custom routing)
+  const subjectEl = document.querySelector('h2.hP') || document.querySelector('div[role="main"] h2');
+  const domThreadId = subjectEl?.getAttribute('data-legacy-thread-id');
+  if (domThreadId && isValidHexId(domThreadId)) {
+    return { view: 'thread', threadId: domThreadId };
   }
 
   if (hash.includes('compose')) {
@@ -84,7 +91,36 @@ function onContextChange(): void {
   }
 
   if (ctx.view === 'thread' && ctx.threadId) {
-    // Try to extract email metadata from the DOM and resolve the legacy hex IDs
+    // Use the URL hash threadId immediately so the side panel / popup
+    // can enable the "Summarize This Email" action right away. The Gmail
+    // API accepts both hex and base64url thread IDs, so we no longer gate
+    // on isValidHexId here. The DOM extraction below is best-effort
+    // enrichment (subject / from / hex emailId) and runs in parallel.
+    currentThreadId = ctx.threadId;
+    safeSendMessage({
+      type: 'GMAIL_CONTEXT_CHANGE',
+      context: {
+        view: 'thread',
+        threadId: ctx.threadId,
+        emailId: null,
+        url: window.location.href,
+      },
+    });
+    // Also fire a minimal EMAIL_CONTEXT_UPDATE so the side panel can show
+    // the email context banner immediately, even before DOM extraction
+    // resolves subject/from. The service worker will broadcast a richer
+    // update once it has fetched the message from Gmail.
+    safeSendMessage({
+      type: 'EMAIL_CONTEXT_UPDATE',
+      context: {
+        threadId: ctx.threadId,
+        subject: '',
+        from: '',
+        emailId: null,
+      },
+    });
+
+    // Best-effort DOM enrichment (subject / from / hex emailId).
     extractThreadMetadata(ctx.threadId);
   } else if (ctx.view === 'compose') {
     safeSendMessage({
@@ -154,17 +190,20 @@ function extractThreadMetadata(threadId: string): void {
           },
         });
 
-        if (subject || from) {
-          safeSendMessage({
-            type: 'EMAIL_CONTEXT_UPDATE',
-            context: {
-              threadId: resolvedThreadId,
-              subject,
-              from: fromName ? `${fromName} <${from}>` : from,
-              emailId: resolvedEmailId,
-            },
-          });
-        }
+        // Always send EMAIL_CONTEXT_UPDATE on resolution so the side panel
+        // merges in the emailId (and any subject/from we managed to scrape),
+        // even when Gmail's DOM selectors no longer match. The service
+        // worker will broadcast a richer update once it has fetched the
+        // message from Gmail via getThread/getMessage.
+        safeSendMessage({
+          type: 'EMAIL_CONTEXT_UPDATE',
+          context: {
+            threadId: resolvedThreadId,
+            subject,
+            from: fromName ? `${fromName} <${from}>` : from,
+            emailId: resolvedEmailId,
+          },
+        });
       }
     } catch {
       // DOM parsing can fail silently

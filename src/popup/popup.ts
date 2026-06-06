@@ -20,16 +20,25 @@ const dom = {
   get authSection() { return $('#authSection'); },
   get authBtn() { return $('#authBtn') as HTMLButtonElement | null; },
   get btnSummarize() { return $('#btnSummarize') as HTMLButtonElement | null; },
+  get btnSummarizeCurrent() { return $('#btnSummarizeCurrent') as HTMLButtonElement | null; },
   get btnPriority() { return $('#btnPriority') as HTMLButtonElement | null; },
   get btnOpenPanel() { return $('#btnOpenPanel') as HTMLButtonElement | null; },
   get settingsBtn() { return $('#settingsBtn') as HTMLButtonElement | null; },
   get optionsLink() { return $('#optionsLink'); },
 };
 
+interface GmailContextSnapshot {
+  view: 'inbox' | 'thread' | 'compose' | null;
+  threadId: string | null;
+  emailId: string | null;
+  url?: string;
+}
+
 async function initPopup(): Promise<void> {
   await applyStoredTheme();
   setupEventListeners();
   await checkAuthStatus();
+  await detectOpenEmail();
 }
 
 if (document.readyState === 'loading') {
@@ -94,6 +103,49 @@ async function fetchUnreadCount(): Promise<void> {
   }
 }
 
+/**
+ * Query the active Gmail tab for the email currently open (if any) and toggle
+ * the "Summarize This Email" button accordingly. Stays disabled with an
+ * explanatory tooltip when there's no open email.
+ */
+async function detectOpenEmail(): Promise<void> {
+  if (!dom.btnSummarizeCurrent) return;
+
+  const setButtonState = (
+    enabled: boolean,
+    tooltip: string,
+  ): void => {
+    dom.btnSummarizeCurrent!.disabled = !enabled;
+    dom.btnSummarizeCurrent!.title = tooltip;
+  };
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !tab.url?.includes('mail.google.com')) {
+      setButtonState(false, 'Open Gmail and select an email to enable');
+      return;
+    }
+
+    try {
+      const ctx = (await chrome.tabs.sendMessage(tab.id, {
+        type: 'GET_CURRENT_CONTEXT',
+      })) as GmailContextSnapshot | undefined;
+
+      if (ctx?.view === 'thread' && (ctx.emailId || ctx.threadId)) {
+        setButtonState(true, 'Summarize the email currently open in Gmail');
+      } else {
+        setButtonState(false, 'Open an email in Gmail to enable');
+      }
+    } catch (msgErr) {
+      console.warn('[InboxCommander] Failed to communicate with content script:', msgErr);
+      setButtonState(false, 'Please refresh Gmail to enable');
+    }
+  } catch (err) {
+    console.error('[InboxCommander] Error querying active tab:', err);
+    setButtonState(false, 'Open an email in Gmail to enable');
+  }
+}
+
 function setupEventListeners(): void {
   dom.authBtn?.addEventListener('click', async () => {
     if (!dom.authBtn) return;
@@ -135,9 +187,14 @@ function setupEventListeners(): void {
     });
   });
 
-  const triggerChatAction = async (actionText: string): Promise<void> => {
+  const triggerChatAction = async (
+    actionText: string,
+    emailContext: GmailContextSnapshot | null = null,
+  ): Promise<void> => {
     try {
-      await chrome.storage.session.set({ pendingQuickAction: actionText });
+      const payload: Record<string, unknown> = { pendingQuickAction: actionText };
+      if (emailContext) payload.pendingEmailContext = emailContext;
+      await chrome.storage.session.set(payload);
     } catch {
       // session storage is optional; the side panel will fall back to message passing
     }
@@ -171,6 +228,34 @@ function setupEventListeners(): void {
 
   dom.btnSummarize?.addEventListener('click', () => triggerChatAction('SUMMARIZE_INBOX'));
   dom.btnPriority?.addEventListener('click', () => triggerChatAction('PRIORITY_EMAILS'));
+
+  dom.btnSummarizeCurrent?.addEventListener('click', async () => {
+    if (dom.btnSummarizeCurrent?.disabled) return;
+
+    // Re-query so the context is as fresh as the user's click — Gmail may have
+    // navigated between popup open and click.
+    let ctx: GmailContextSnapshot | null = null;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id && tab.url?.includes('mail.google.com')) {
+        const raw = (await chrome.tabs.sendMessage(tab.id, {
+          type: 'GET_CURRENT_CONTEXT',
+        })) as GmailContextSnapshot | undefined;
+        if (raw && raw.view === 'thread' && (raw.emailId || raw.threadId)) {
+          ctx = raw;
+        }
+      }
+    } catch {
+      ctx = null;
+    }
+
+    if (!ctx) {
+      alert('Please open an email in Gmail first.');
+      return;
+    }
+
+    await triggerChatAction('SUMMARIZE_EMAIL', ctx);
+  });
 
   dom.settingsBtn?.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
