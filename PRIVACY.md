@@ -1,6 +1,6 @@
 # InboxCommander — Privacy Policy
 
-**Effective:** 2026-06-04
+**Effective:** 2026-06-05
 
 InboxCommander is a Chrome extension that helps you triage, summarize, classify, draft, and reply to Gmail messages using Google AI (Gemini). This policy describes what the extension accesses, stores, and transmits.
 
@@ -15,11 +15,11 @@ InboxCommander is a Chrome extension that helps you triage, summarize, classify,
 
 When you connect your Google account, the extension requests these OAuth scopes:
 
-| Scope | Why |
-|---|---|
+| Scope                                          | Why                                                    |
+| ---------------------------------------------- | ------------------------------------------------------ |
 | `https://www.googleapis.com/auth/gmail.modify` | Read, label, archive, and trash messages you ask it to |
-| `https://www.googleapis.com/auth/gmail.send` | Send drafts and replies you approve |
-| `https://www.googleapis.com/auth/gmail.labels` | Apply labels to messages you ask it to |
+| `https://www.googleapis.com/auth/gmail.send`   | Send drafts and replies you approve                    |
+| `https://www.googleapis.com/auth/gmail.labels` | Apply labels to messages you ask it to                 |
 
 These scopes are used **only** for actions you explicitly trigger or approve through the extension's UI. There is no background harvesting of email content.
 
@@ -48,7 +48,6 @@ Nothing else is stored. No cookies, no fingerprinting, no cross-site state.
 - `storage` — store settings and the action log locally
 - `sidePanel` — show the AI chat in Chrome's side panel
 - `tabs` — detect when you're on Gmail so the side panel can hydrate
-- `alarms` — reserved for future scheduled-task features (currently unused)
 - `activeTab` — interact with the open Gmail tab when you click the toolbar icon
 
 Host permissions are limited to `mail.google.com`, `gmail.googleapis.com`, and `generativelanguage.googleapis.com`.

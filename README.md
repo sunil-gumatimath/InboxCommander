@@ -15,6 +15,7 @@ AI-powered Gmail assistant as a Chrome extension (Manifest V3). Reads, summarize
 ## How it works
 
 The extension is a privacy-respecting two-token system:
+
 - **Google OAuth** (built-in): authenticates you to your own Gmail via `chrome.identity`
 - **Gemini API key** (you provide): used for AI features, stored in `chrome.storage.local`
 
@@ -23,7 +24,8 @@ No data leaves your browser except direct calls to Google APIs you authorize.
 ## Setup
 
 ### 1. Prerequisites
-- [Bun](https://bun.sh) (or Node 18+)
+
+- [Bun](https://bun.sh) **1.0+** (used as both the package manager and the test runner)
 - Chrome / Edge / Brave (any Chromium browser)
 
 ### 2. Get a Google OAuth client ID (one-time per fork)
@@ -38,10 +40,13 @@ No data leaves your browser except direct calls to Google APIs you authorize.
 6. Copy the generated `....apps.googleusercontent.com` value
 
 Then create a `.env` file in the project root (it's gitignored):
+
 ```bash
 bun run setup   # copies .env.example to .env
 ```
+
 Open `.env` and paste your client ID:
+
 ```
 GOOGLE_OAUTH_CLIENT_ID=123456789-abc...xyz.apps.googleusercontent.com
 ```
@@ -49,6 +54,7 @@ GOOGLE_OAUTH_CLIENT_ID=123456789-abc...xyz.apps.googleusercontent.com
 The build reads this at compile time and injects it into the generated `manifest.json` — no secrets in git.
 
 ### 3. Build & load
+
 ```bash
 bun install
 bun run build
@@ -57,6 +63,7 @@ bun run build
 Then `chrome://extensions` -> enable **Developer mode** -> **Load unpacked** -> select the project root folder.
 
 ### 4. Configure
+
 - Right-click the extension icon -> **Options**
 - Paste your **Gemini API key** (get one free at [aistudio.google.com](https://aistudio.google.com/apikey))
 - Click **Test API Key** to verify
@@ -68,10 +75,18 @@ That's it. Open Gmail and click the extension icon to start.
 ## Development
 
 ```bash
-bun run dev          # watch mode
-bun run typecheck    # tsc --noEmit
-bun run build        # production build
+bun run dev              # Vite watch mode
+bun run typecheck        # tsc --noEmit (strict)
+bun run test             # Vitest (one-shot)
+bun run test:watch       # Vitest watch
+bun run test:coverage    # Vitest with v8 coverage
+bun run lint             # ESLint 9 flat config
+bun run format           # Prettier write
+bun run format:check     # Prettier check (used in CI)
+bun run build            # typecheck + Vite production build
 ```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contributor guide, [`CHANGELOG.md`](CHANGELOG.md) for what changed recently, and [`SECURITY.md`](SECURITY.md) for the security policy and how to report vulnerabilities.
 
 ## Project structure
 
@@ -82,9 +97,33 @@ src/
   popup/             # toolbar popup
   sidepanel/         # persistent side panel chat UI
   options/           # settings page
-  shared/            # types, constants, utils
+  shared/            # types, constants, utils, storage, messaging, escape, markdown, retry
 src/manifest.json    # extension manifest (source of truth)
+
+# Build-time config
+vite.config.ts       # Vite + CRX build (injects OAuth client ID from .env)
+vitest.config.ts     # Vitest test runner
+eslint.config.js     # ESLint 9 flat config
+.prettierrc.json     # Prettier config
+
+# Docs
+README.md            # this file
+PRIVACY.md           # privacy policy
+CHANGELOG.md         # release notes
+CONTRIBUTING.md      # contributor guide
+SECURITY.md          # security policy & vulnerability reporting
 ```
+
+## CI
+
+Every push and PR runs four independent GitHub Actions jobs against the Bun toolchain (`.github/workflows/ci.yml`):
+
+- **lint** — `bun run lint` + `bun run format:check`
+- **typecheck** — `bun run typecheck`
+- **test** — `bun run test`
+- **build** — depends on the other three; runs `bun run build` with a placeholder OAuth client ID to verify the build pipeline
+
+A separate `release.yml` workflow runs on `v*` tags and uses the real `GOOGLE_OAUTH_CLIENT_ID` repository secret.
 
 ## Privacy
 
@@ -114,10 +153,11 @@ git push origin v1.0.0
 
 Add `GOOGLE_OAUTH_CLIENT_ID` as a repository secret first (Settings → Secrets and variables → Actions → New repository secret). The workflow will:
 
-1. Run typecheck
-2. Build the extension with your real OAuth client ID injected
-3. Convert the source SVG icon into 16/48/128 PNGs for the store listing (requires `rsvg-convert` on the runner — installed by default on Ubuntu)
-4. Upload a `inboxcommander-vX.Y.Z.zip` and PNG icons to a draft GitHub release
+1. Sync the manifest version to the tag (e.g. tag `v1.2.3` writes `"version": "1.2.3"` into `src/manifest.json`)
+2. Run typecheck
+3. Build the extension with your real OAuth client ID injected
+4. Convert the source SVG icon into 16/48/128 PNGs for the store listing (requires `rsvg-convert` on the runner — installed by default on Ubuntu)
+5. Upload a `inboxcommander-vX.Y.Z.zip` and PNG icons to a draft GitHub release
 
 ### 3. Upload to the Chrome Web Store
 
