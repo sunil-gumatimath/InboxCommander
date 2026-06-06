@@ -23,9 +23,11 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
 
-    // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    // Some stricter flags (enabled)
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "include": ["src/**/*", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "out", "coverage", "eslint.config.js"]
 }

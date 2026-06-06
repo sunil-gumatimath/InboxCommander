@@ -2,8 +2,6 @@ import { defineConfig, loadEnv } from 'vite';
 import { crx } from '@crxjs/vite-plugin';
 import manifest from './src/manifest.json';
 
-const PLACEHOLDER = '__GOOGLE_OAUTH_CLIENT_ID__';
-
 function resolveClientId(env: Record<string, string>): string {
   const raw = env.GOOGLE_OAUTH_CLIENT_ID?.trim();
   const isGithubActions = process.env.GITHUB_ACTIONS === 'true';

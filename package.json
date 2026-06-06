@@ -4,16 +4,33 @@
     "setup": "node -e \"const fs=require('fs');if(!fs.existsSync('.env')){fs.copyFileSync('.env.example','.env');console.log('Created .env from .env.example. Edit it to add your GOOGLE_OAUTH_CLIENT_ID.');}else{console.log('.env already exists.');}\"",
     "dev": "vite",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "rm -rf assets content options popup sidepanel manifest.json service-worker-loader.js && echo 'Cleaned build artifacts.'",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
   "type": "module",
   "private": true,
+  "engines": {
+    "bun": ">=1.0.0"
+  },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.4.0",
+    "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
     "@types/chrome": "^0.1.42",
-    "vite": "^8.0.16"
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^9",
+    "eslint-config-prettier": "^9",
+    "prettier": "^3",
+    "typescript-eslint": "^8",
+    "vite": "^8.0.16",
+    "vitest": "^2.1.9"
   },
   "peerDependencies": {
     "typescript": "^5"
